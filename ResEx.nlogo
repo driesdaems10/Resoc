@@ -12,16 +12,28 @@
 ;; = regular comment
 ;; TBI = To Be Implemented
 
-globals [year]
+extensions [gis]
+
+globals [
+  coordsys?
+  year
+  elevation-raster
+  fertility-raster
+  standingStock-raster
+]
+
 breed [communities community]
 breed [households household]
 
 patches-own [
   elevation
-  wood ;; all patches are forest initially
-  wood-quality
+  wood-age ;; all patches are forest initially and are therefore given an age corresponding to a more or less mature forest. When cut, forest age is reset to zero.
+  wood-maxStandingStock ;; upper limit to usable wood contained within a forested patch (m³/ha). Variable A in the Chapman-Richards equation.
+  wood-standingStock
+  wood-varB; B and C are the two other variables needed for the Chapman-Richards model.They are considered constant per patch
+  wood-varC
   food
-  food-fertility
+  food-fertility ;; crop yield on a cultivated patch (tons/(year*ha))
   clay ;; variable defining whether or not a patch can be a clay source
   clay-quality
 ]
@@ -40,7 +52,7 @@ households-own []
 
 to setup
   ca
-  ; import-map ;;;; TBI:
+  import-map
   setup-topo
   setup-communities
   setup-households
@@ -60,10 +72,31 @@ end
 ;;                   PROCEDURES                   ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-to setup-topo ;; create rugged landscape
-  ask patches [set elevation random 10000]
-  repeat 2 [diffuse elevation 1]
-  ask patches [set pcolor scale-color green elevation 1000 9000]
+to import-map
+  if coordsys? = false [
+    gis:load-coordinate-system "/GIS data/32636.prj"
+    set coordsys? true
+  ]
+  set elevation-raster gis:load-dataset "/GIS data/Altitude_EPSG32636_Clipped_Resampled2.asc"
+  set fertility-raster gis:load-dataset "/GIS data/fertilityFromRegressionWaterwaysExcluded_EPSG32636_Clipped_Resampled2.asc"
+  set standingStock-raster gis:load-dataset "/GIS data/forestStandingStockWaterwaysExcluded_EPSG36326_Clipped_Resampled2.asc"
+
+  gis:set-world-envelope (gis:envelope-of elevation-raster)
+
+  resize-world 0 (gis:width-of elevation-raster - 1) 0 (gis:height-of elevation-raster - 1)
+  set-patch-size 1;; patches should have an area of 1 ha (through this command, patch unit size is set  to 1 pixel = 100 x 100m)
+end
+
+
+to setup-topo ;; show altitude of landscape as background and set altitude of patches
+  ask patches [set elevation gis:raster-value elevation-raster pxcor (max-pycor - pycor) ]
+  ;ask patches [set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)]
+  ask patches [set wood-maxStandingStock gis:raster-value standingStock-raster pxcor (max-pycor - pycor)]
+  ask patches
+  [
+    let el gis:raster-sample elevation-raster self
+    if ((el <= 0) or (el >= 0)) [ set pcolor scale-color black elevation 252 2619 ]
+  ]
 end
 
 to setup-communities
@@ -92,20 +125,26 @@ end
 to setup-resources
   ask patches [
     ifelse not any? communities-here [    ;; settled patches are not forested and not suited for agriculture
-     set wood true ;; all non-settled patches are forest at the start
-     set food-fertility random 100 ;; random initial implementation of fertility
+      set wood-age 100 + random 300 ;; all non-settled patches are more or less mature forest at the start
+      set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)
     ]
-   [
-    set wood false
-    set food-fertility 0
-   ]
+    [
+      set wood-age 0
+      set food-fertility 0
+    ]
   ]
-  repeat 2 [diffuse food-fertility 1] ;; cluster fertility in landscape
+
+  ask patches [
+    set wood-varB -1 * (0.011 + random-float 0.034)
+    set wood-varC 1.07 + random-float 0.46
+  ]
+
+  wood-updateStandingStock
+
   ask n-of 100 patches [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
-      set clay true
-      set clay-quality random 100  ;; TBI: quality random for now but needs to made dependent on altitude
-    ]
-  ;; TBI: correlation fertility & wood quality with elevation
+    set clay true
+    set clay-quality random 100  ;; TBI: quality random for now but needs to made dependent on altitude
+  ]
 end
 
 to energy-availability  ;; every community checks energy availability to determine next strategy
@@ -123,28 +162,35 @@ end
 
 to add-sites ;; TBI: periodically adding sites
 end
+
+to wood-updateStandingStock ;;Needs to be run every year (2 ticks). Patches with wood-age 0 don't get any wood on them.
+  ask patches [
+    set wood-standingStock wood-maxStandingStock * (1 - exp (wood-varB * wood-age)) ^ wood-varC
+  ]
+
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-209
+205
 10
-621
-423
+1012
+415
 -1
 -1
-4.0
+1.0
 1
 10
 1
 1
 1
 0
+0
+0
 1
-1
-1
--50
-50
--50
-50
+0
+798
+0
+395
 0
 0
 1
