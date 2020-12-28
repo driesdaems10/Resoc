@@ -1,8 +1,8 @@
 ;;;; Next steps to be implemented:
 ;; resource exploitation
 ;; site dynamics: periodic addition of new site + buffer catchment zone per site
+;; implement site sizes according to archaeological survey data?
 ;; correlation resource quality with elevation
-;; implement semi-realistic GIS environment
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -12,7 +12,10 @@
 ;; = regular comment
 ;; TBI = To Be Implemented
 
-extensions [gis]
+extensions [
+  gis
+  palette
+]
 
 globals [
   coordsys?
@@ -20,6 +23,8 @@ globals [
   elevation-raster
   fertility-raster
   standingStock-raster
+  IA-sites
+  site-locations
 ]
 
 breed [communities community]
@@ -44,11 +49,9 @@ communities-own [
 
 households-own []
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                SETUP & GO                      ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 
 to setup
   ca
@@ -74,12 +77,12 @@ end
 
 to import-map
   if coordsys? = false [
-    gis:load-coordinate-system "/GIS data/32636.prj"
+    gis:load-coordinate-system "/data/32636.prj"
     set coordsys? true
   ]
-  set elevation-raster gis:load-dataset "/GIS data/Altitude_EPSG32636_Clipped_Resampled2.asc"
-  set fertility-raster gis:load-dataset "/GIS data/fertilityFromRegressionWaterwaysExcluded_EPSG32636_Clipped_Resampled2.asc"
-  set standingStock-raster gis:load-dataset "/GIS data/forestStandingStockWaterwaysExcluded_EPSG36326_Clipped_Resampled2.asc"
+  set elevation-raster gis:load-dataset "/data/Altitude_EPSG32636_Clipped_Resampled2.asc"
+  set fertility-raster gis:load-dataset "/data/fertilityFromRegressionWaterwaysExcluded_EPSG32636_Clipped_Resampled2.asc"
+  set standingStock-raster gis:load-dataset "/data/forestStandingStockWaterwaysExcluded_EPSG36326_Clipped_Resampled2.asc"
 
   gis:set-world-envelope (gis:envelope-of elevation-raster)
 
@@ -92,24 +95,58 @@ to setup-topo ;; show altitude of landscape as background and set altitude of pa
   ask patches [set elevation gis:raster-value elevation-raster pxcor (max-pycor - pycor) ]
   ;ask patches [set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)]
   ask patches [set wood-maxStandingStock gis:raster-value standingStock-raster pxcor (max-pycor - pycor)]
+  let e-min min [elevation] of patches
+  let e-max max [elevation] of patches
   ask patches
   [
     let el gis:raster-sample elevation-raster self
-    if ((el <= 0) or (el >= 0)) [ set pcolor scale-color black elevation 252 2619 ]
+   ; if ((el <= 0) or (el >= 0)) [ set pcolor scale-color black elevation 252 2619 ] ;; your if-clause doesn't really exclude any patches?
+    ifelse (el > 850)
+    [ set pcolor palette:scale-gradient
+      [[252 141 89][255 255 191][0 104 55]] elevation e-min e-max ]
+    [ set pcolor blue ]
   ]
 end
 
 to setup-communities
+  ifelse real-communities = false [
   let max-elevation max [elevation] of patches ;; find highest elevation value of patches in each run
-  let highest patches with [elevation > (max-elevation / 2)] ;; sites located on higher elevation, but rather crude for now
+  let highest patches with [elevation > (max-elevation / 2)] ;; sites located on higher elevation are favoured, but rather crude for now
   create-communities communities-number [
     while [any? other communities in-radius buffer-zone] [    ;; no sites can be created within the pre-defined buffer zone of other sites
       move-to one-of highest
     ]
     set shape "house"
     ;; set population size based on a random number drawn from a normal distribution determined by slider on interface
-    set population round random-normal number-households (number-households / 3) ;; rounded number because random-normal produces a float, SD still needs to be defined based on real data!
+    set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
+    ;; average population currently set at 1000 with sd 500 cfr. Düzen Tepe data
+    ;; BUT: Düzen one of the largest sites --> TO DO: calibrate full curve based on other estimates
     set size (population / 10)
+  ]
+   ]
+  [
+    set IA-sites gis:load-dataset "/data/Iron Age sites.shp"
+    let valid false
+    foreach gis:property-names IA-sites [
+      property-name ->
+      if (property-name = "SITE")[ set valid true ]
+      ]
+
+    foreach gis:feature-list-of IA-sites [
+      site-coord ->
+      let coordinates gis:location-of (first (first (gis:vertex-lists-of site-coord)))
+      let long item 0 coordinates
+      let lat item 1 coordinates
+      if (valid) [
+        let site gis:property-value site-coord "Site"
+        create-communities 1 [
+          set shape "house"
+          set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
+          set size (population / 10)
+          setxy long lat
+      ]
+    ]
+  ]
   ]
 end
 
@@ -171,10 +208,10 @@ to wood-updateStandingStock ;;Needs to be run every year (2 ticks). Patches with
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-205
-10
-1012
-415
+201
+11
+1008
+416
 -1
 -1
 1.0
@@ -232,10 +269,10 @@ NIL
 1
 
 SLIDER
-4
-119
-176
-152
+8
+158
+180
+191
 communities-number
 communities-number
 0
@@ -247,40 +284,40 @@ NIL
 HORIZONTAL
 
 SLIDER
-4
-152
-176
-185
+8
+191
+180
+224
 buffer-zone
 buffer-zone
 0
-30
-15.0
+200
+50.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-4
-187
-176
-220
+8
+226
+180
+259
 number-households
 number-households
 0
-100
-30.0
+500
+200.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-4
-88
-176
-121
+8
+127
+180
+160
 time-limit
 time-limit
 0
@@ -290,6 +327,17 @@ time-limit
 1
 NIL
 HORIZONTAL
+
+SWITCH
+8
+94
+180
+127
+real-communities
+real-communities
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
