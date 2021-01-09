@@ -25,6 +25,8 @@ globals [
   standingStock-raster
   IA-sites
   site-locations
+  walkingTime-raster
+  waterBodies-raster
 ]
 
 breed [communities community]
@@ -41,6 +43,7 @@ patches-own [
   food-fertility ;; crop yield on a cultivated patch (tons/(year*ha))
   clay ;; variable defining whether or not a patch can be a clay source
   clay-quality
+  land?
 ]
 
 communities-own [
@@ -83,6 +86,8 @@ to import-map
   set elevation-raster gis:load-dataset "/data/Altitude_EPSG32636_Clipped_Resampled2.asc"
   set fertility-raster gis:load-dataset "/data/fertilityFromRegressionWaterwaysExcluded_EPSG32636_Clipped_Resampled2.asc"
   set standingStock-raster gis:load-dataset "/data/forestStandingStockWaterwaysExcluded_EPSG36326_Clipped_Resampled2.asc"
+  set walkingTime-raster gis:load-dataset "/data/Tobler_EPSG32636.asc"
+  set waterBodies-raster gis:load-dataset "/data/lakesAndRiversRasterized_EPSG32636_Clipped.asc"
 
   gis:set-world-envelope (gis:envelope-of elevation-raster)
 
@@ -91,7 +96,7 @@ to import-map
 end
 
 
-to setup-topo ;; show altitude of landscape as background and set altitude of patches
+to setup-topo
   ask patches [set elevation gis:raster-value elevation-raster pxcor (max-pycor - pycor) ]
   ;ask patches [set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)]
   ask patches [set wood-maxStandingStock gis:raster-value standingStock-raster pxcor (max-pycor - pycor)]
@@ -99,19 +104,22 @@ to setup-topo ;; show altitude of landscape as background and set altitude of pa
   let e-max max [elevation] of patches
   ask patches
   [
-    let el gis:raster-sample elevation-raster self
-   ; if ((el <= 0) or (el >= 0)) [ set pcolor scale-color black elevation 252 2619 ] ;; your if-clause doesn't really exclude any patches?
-    ifelse (el > 850)
+    let water gis:raster-sample waterBodies-raster self
+    ifelse (water = 0); waterBodies raster is equal to zero when no water present.
     [ set pcolor palette:scale-gradient
-      [[252 141 89][255 255 191][0 104 55]] elevation e-min e-max ]
-    [ set pcolor blue ]
+      [[252 141 89][255 255 191][0 104 55]] elevation e-min e-max
+      set land? true
+    ]
+    [ set pcolor blue
+      set land? false
+    ]
   ]
 end
 
 to setup-communities
   ifelse real-communities = false [
   let max-elevation max [elevation] of patches ;; find highest elevation value of patches in each run
-  let highest patches with [elevation > (max-elevation / 2)] ;; sites located on higher elevation are favoured, but rather crude for now
+  let highest patches with [elevation > (max-elevation / 2) and land? = true] ;; sites located on higher elevation are favoured, but rather crude for now. Must be on land.
   create-communities communities-number [
     while [any? other communities in-radius buffer-zone] [    ;; no sites can be created within the pre-defined buffer zone of other sites
       move-to one-of highest
@@ -159,7 +167,7 @@ to setup-households ;; creates a total population through number defined by slid
     ]
 end
 
-to setup-resources
+to setup-resources ;; already included in GIS step that wood or food cannot grow on water.
   ask patches [
     ifelse not any? communities-here [    ;; settled patches are not forested and not suited for agriculture
       set wood-age 100 + random 300 ;; all non-settled patches are more or less mature forest at the start
@@ -202,7 +210,7 @@ to exploit-resources
   ;; TBI: if food --> tends to stay food? assume stability in agricultural plots?
 end
 
-to add-sites ;; TBI: periodically adding sites
+to add-sites ;; TBI: periodically adding sites ON lAND
 end
 
 to wood-updateStandingStock ;;Needs to be run every year (2 ticks). Patches with wood-age 0 don't get any wood on them.
