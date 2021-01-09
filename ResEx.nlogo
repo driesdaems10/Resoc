@@ -1,8 +1,8 @@
 ;;;; Next steps to be implemented:
 ;; resource exploitation
 ;; site dynamics: periodic addition of new site + buffer catchment zone per site
+;; implement site sizes according to archaeological survey data?
 ;; correlation resource quality with elevation
-;; implement semi-realistic GIS environment
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -12,18 +12,38 @@
 ;; = regular comment
 ;; TBI = To Be Implemented
 
-globals [year]
+extensions [
+  gis
+  palette
+]
+
+globals [
+  coordsys?
+  year
+  elevation-raster
+  fertility-raster
+  standingStock-raster
+  IA-sites
+  site-locations
+  walkingTime-raster
+  waterBodies-raster
+]
+
 breed [communities community]
 breed [households household]
 
 patches-own [
   elevation
-  wood ;; all patches are forest initially
-  wood-quality
+  wood-age ;; all patches are forest initially and are therefore given an age corresponding to a more or less mature forest. When cut, forest age is reset to zero.
+  wood-maxStandingStock ;; upper limit to usable wood contained within a forested patch (m³/ha). Variable A in the Chapman-Richards equation.
+  wood-standingStock
+  wood-varB; B and C are the two other variables needed for the Chapman-Richards model.They are considered constant per patch
+  wood-varC
   food
-  food-fertility
+  food-fertility ;; crop yield on a cultivated patch (tons/(year*ha))
   clay ;; variable defining whether or not a patch can be a clay source
   clay-quality
+  land?
 ]
 
 communities-own [
@@ -32,15 +52,13 @@ communities-own [
 
 households-own []
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                SETUP & GO                      ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
 to setup
   ca
-  ; import-map ;;;; TBI:
+  import-map
   setup-topo
   setup-communities
   setup-households
@@ -60,23 +78,83 @@ end
 ;;                   PROCEDURES                   ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-to setup-topo ;; create rugged landscape
-  ask patches [set elevation random 10000]
-  repeat 2 [diffuse elevation 1]
-  ask patches [set pcolor scale-color green elevation 1000 9000]
+to import-map
+  if coordsys? = false [
+    gis:load-coordinate-system "/data/32636.prj"
+    set coordsys? true
+  ]
+  set elevation-raster gis:load-dataset "/data/Altitude_EPSG32636_Clipped_Resampled2.asc"
+  set fertility-raster gis:load-dataset "/data/fertilityFromRegressionWaterwaysExcluded_EPSG32636_Clipped_Resampled2.asc"
+  set standingStock-raster gis:load-dataset "/data/forestStandingStockWaterwaysExcluded_EPSG36326_Clipped_Resampled2.asc"
+  set walkingTime-raster gis:load-dataset "/data/Tobler_EPSG32636.asc"
+  set waterBodies-raster gis:load-dataset "/data/lakesAndRiversRasterized_EPSG32636_Clipped.asc"
+
+  gis:set-world-envelope (gis:envelope-of elevation-raster)
+
+  resize-world 0 (gis:width-of elevation-raster - 1) 0 (gis:height-of elevation-raster - 1)
+  set-patch-size 1;; patches should have an area of 1 ha (through this command, patch unit size is set  to 1 pixel = 100 x 100m)
+end
+
+
+to setup-topo
+  ask patches [set elevation gis:raster-value elevation-raster pxcor (max-pycor - pycor) ]
+  ;ask patches [set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)]
+  ask patches [set wood-maxStandingStock gis:raster-value standingStock-raster pxcor (max-pycor - pycor)]
+  let e-min min [elevation] of patches
+  let e-max max [elevation] of patches
+  ask patches
+  [
+    let water gis:raster-sample waterBodies-raster self
+    ifelse (water = 0); waterBodies raster is equal to zero when no water present.
+    [ set pcolor palette:scale-gradient
+      [[252 141 89][255 255 191][0 104 55]] elevation e-min e-max
+      set land? true
+    ]
+    [ set pcolor blue
+      set land? false
+    ]
+  ]
 end
 
 to setup-communities
+  ifelse real-communities = false [
   let max-elevation max [elevation] of patches ;; find highest elevation value of patches in each run
-  let highest patches with [elevation > (max-elevation / 2)] ;; sites located on higher elevation, but rather crude for now
+  let highest patches with [elevation > (max-elevation / 2) and land? = true] ;; sites located on higher elevation are favoured, but rather crude for now. Must be on land.
   create-communities communities-number [
     while [any? other communities in-radius buffer-zone] [    ;; no sites can be created within the pre-defined buffer zone of other sites
       move-to one-of highest
     ]
     set shape "house"
     ;; set population size based on a random number drawn from a normal distribution determined by slider on interface
-    set population round random-normal number-households (number-households / 3) ;; rounded number because random-normal produces a float, SD still needs to be defined based on real data!
-    set size (population / 10)
+    set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
+    ;; average population currently set at 500  with sd 250
+    set size (population / 5)
+  ]
+   ]
+  [
+    set IA-sites gis:load-dataset "/data/Iron Age sites.shp"
+    let valid false
+    foreach gis:property-names IA-sites [
+      property-name ->
+      if (property-name = "SITE")[ set valid true ]
+      ]
+
+    foreach gis:feature-list-of IA-sites [
+      site-coord ->
+      let coordinates gis:location-of (first (first (gis:vertex-lists-of site-coord)))
+      let long item 0 coordinates
+      let lat item 1 coordinates
+      if (valid) [
+        let Site gis:property-value site-coord "Site"
+        create-communities 1 [
+          set shape "house"
+          set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
+          set size (population / 5)
+          setxy long lat
+          ;set label Site
+      ]
+    ]
+  ]
   ]
 end
 
@@ -89,23 +167,29 @@ to setup-households ;; creates a total population through number defined by slid
     ]
 end
 
-to setup-resources
+to setup-resources ;; already included in GIS step that wood or food cannot grow on water.
   ask patches [
     ifelse not any? communities-here [    ;; settled patches are not forested and not suited for agriculture
-     set wood true ;; all non-settled patches are forest at the start
-     set food-fertility random 100 ;; random initial implementation of fertility
+      set wood-age 100 + random 300 ;; all non-settled patches are more or less mature forest at the start
+      set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)
     ]
-   [
-    set wood false
-    set food-fertility 0
-   ]
+    [
+      set wood-age 0
+      set food-fertility 0
+    ]
   ]
-  repeat 2 [diffuse food-fertility 1] ;; cluster fertility in landscape
-  ask n-of 100 patches [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
-      set clay true
-      set clay-quality random 100  ;; TBI: quality random for now but needs to made dependent on altitude
-    ]
-  ;; TBI: correlation fertility & wood quality with elevation
+
+  ask patches [
+    set wood-varB -1 * (0.011 + random-float 0.034)
+    set wood-varC 1.07 + random-float 0.46
+  ]
+
+  wood-updateStandingStock
+
+  ask n-of 10000 patches [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
+    set clay true
+    set clay-quality random 100  ;; TBI: quality random for now but needs to made dependent on altitude
+  ]
 end
 
 to energy-availability  ;; every community checks energy availability to determine next strategy
@@ -114,37 +198,49 @@ end
 
 to exploit-resources
   ;; TBI: Bi-annual ticks --> different resources exploited
+  ask households [
+    ;; TBI: walking costs need to be implemented
+
+  ]
+
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
-  ;; TBI: walking costs need to be implemented
+
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
   ;; TBI: if wood --> food and clay become possible after wood has been depleted or regrowth
   ;; TBI: if food --> tends to stay food? assume stability in agricultural plots?
 end
 
-to add-sites ;; TBI: periodically adding sites
+to add-sites ;; TBI: periodically adding sites ON lAND
+end
+
+to wood-updateStandingStock ;;Needs to be run every year (2 ticks). Patches with wood-age 0 don't get any wood on them.
+  ask patches [
+    set wood-standingStock wood-maxStandingStock * (1 - exp (wood-varB * wood-age)) ^ wood-varC
+  ]
+
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-209
-10
-621
-423
+201
+11
+1008
+416
 -1
 -1
-4.0
+1.0
 1
 10
 1
 1
 1
 0
+0
+0
 1
-1
-1
--50
-50
--50
-50
+0
+798
+0
+395
 0
 0
 1
@@ -186,10 +282,10 @@ NIL
 1
 
 SLIDER
-4
-119
-176
-152
+8
+158
+180
+191
 communities-number
 communities-number
 0
@@ -201,40 +297,40 @@ NIL
 HORIZONTAL
 
 SLIDER
-4
-152
-176
-185
+8
+191
+180
+224
 buffer-zone
 buffer-zone
 0
-30
-15.0
+200
+50.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-4
-187
-176
-220
+8
+226
+180
+259
 number-households
 number-households
 0
-100
-30.0
+500
+100.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-4
-88
-176
-121
+8
+127
+180
+160
 time-limit
 time-limit
 0
@@ -244,6 +340,17 @@ time-limit
 1
 NIL
 HORIZONTAL
+
+SWITCH
+8
+94
+180
+127
+real-communities
+real-communities
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
