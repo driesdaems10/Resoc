@@ -119,9 +119,8 @@ to setup-communities
     set shape "house"
     ;; set population size based on a random number drawn from a normal distribution determined by slider on interface
     set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
-    ;; average population currently set at 1000 with sd 500 cfr. Düzen Tepe data
-    ;; BUT: Düzen one of the largest sites --> TO DO: calibrate full curve based on other estimates
-    set size (population / 10)
+    ;; average population currently set at 500  with sd 250
+    set size (population / 5)
   ]
    ]
   [
@@ -138,12 +137,13 @@ to setup-communities
       let long item 0 coordinates
       let lat item 1 coordinates
       if (valid) [
-        let site gis:property-value site-coord "Site"
+        let Site gis:property-value site-coord "Site"
         create-communities 1 [
           set shape "house"
           set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
-          set size (population / 10)
+          set size (population / 5)
           setxy long lat
+          ;set label Site
       ]
     ]
   ]
@@ -178,7 +178,7 @@ to setup-resources
 
   wood-updateStandingStock
 
-  ask n-of 100 patches [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
+  ask n-of 10000 patches [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
     set clay true
     set clay-quality random 100  ;; TBI: quality random for now but needs to made dependent on altitude
   ]
@@ -190,8 +190,13 @@ end
 
 to exploit-resources
   ;; TBI: Bi-annual ticks --> different resources exploited
+  ask households [
+    ;; TBI: walking costs need to be implemented
+
+  ]
+
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
-  ;; TBI: walking costs need to be implemented
+
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
   ;; TBI: if wood --> food and clay become possible after wood has been depleted or regrowth
   ;; TBI: if food --> tends to stay food? assume stability in agricultural plots?
@@ -307,7 +312,7 @@ number-households
 number-households
 0
 500
-200.0
+100.0
 1
 1
 NIL
