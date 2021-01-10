@@ -1,8 +1,7 @@
 ;;;; Next steps to be implemented:
-;; resource exploitation
+;; clay & wood exploitation
 ;; site dynamics: periodic addition of new site + buffer catchment zone per site
 ;; implement site sizes according to archaeological survey data?
-;; correlation resource quality with elevation
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -41,18 +40,22 @@ patches-own [
   wood-varC
   food-fertility ;; crop yield on a cultivated patch (tons/(year*ha))
   original-food-value ;; variable to allow food to be regenerated to the original value
-  clay ;; variable defining whether or not a patch can be a clay source
+  clay? ;; variable defining whether or not a patch can be a clay source
   clay-quality
   land?
 ]
 
 communities-own [
   population
-  energy-stock   ;; cumulative stock of food brought in by households as available energy stock
+  energy-stock   ;; cumulative stock of food brought in by households
+  clay-stock     ;; cumulative stock of clay brought in by households
+  wood-stock     ;; cumulative stock of wood brought in by households
 ]
 
 households-own [
-  food-carry ;; variable to allow transfer of food from fields to settlement
+  food-carry ;; variable to allow transfer of food from fields to community
+  clay-carry ;; variable to allow transfer of clay from quarries to community
+  wood-carry ;; variable to allow transfer of wood from forests to community
 ]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -70,11 +73,12 @@ to setup
 end
 
 to go
-  tick
+  add-sites
   energy-availability
   exploit-resources
+  burn-resources
   regenerate
-  add-sites
+  tick
   if ticks = time-limit [stop]
 end
 
@@ -166,10 +170,11 @@ to setup-households ;; creates a total population through number defined by slid
   ask communities [
     hatch-households population [
       set shape "person"
-      set size 1
+      set size 5
       set food-carry 0
      ]
     ]
+ ; print count households
 end
 
 to setup-resources ;; already included in GIS step that wood or food cannot grow on water.
@@ -180,19 +185,19 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
     ]
     [
       set wood-age 0
-      set original-food-value food-fertility
     ]
-  ]
 
-  ask patches [
     set wood-varB -1 * (0.011 + random-float 0.034)
     set wood-varC 1.07 + random-float 0.46
-  ]
 
   wood-updateStandingStock
 
-  ask n-of 10000 patches [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
-    set clay true
+  set original-food-value food-fertility
+  ]
+
+  ask n-of 1000 patches with [land? = true] [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
+    set clay? true
+    set pcolor black
     set clay-quality random 100  ;; TBI: quality random for now but needs to made dependent on altitude
   ]
 end
@@ -206,7 +211,7 @@ to exploit-resources
   ifelse ticks mod 2 = 0 [        ;; alternate between food exploitation and clay/wood
   ;; every two ticks (i.e. once per year) households move to farms to exploit all available resources and move back to settlement
   ask households [
-    pen-down  ;; check whether agents are moving
+  ;  pen-down  ;; check whether agents are moving
     let homebase patch-here
     move-to one-of patches in-radius territory
     let food-exploit 0
@@ -224,7 +229,21 @@ to exploit-resources
   ]
 
   [
-    ;; implement clay/wood exploitation
+    ask households [
+      let homebase patch-here
+      ifelse random 1 = 1 [
+         move-to one-of patches in-radius territory with [clay? = true]  ;; TBI: search for highest quality clays in function of distance
+         ;; exploit stuff
+         move-to homebase
+        ;; transfer to community
+        ]
+        [
+        move-to one-of patches in-radius territory with [wood-standingStock > 0] ;;TBI: search for quality trees?
+        ;; exploit stuff
+        move-to homebase
+        ;; transfer to community
+        ]
+    ]
   ]
   ;; TBI: walking costs need to be implemented
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
@@ -238,10 +257,7 @@ to add-sites ;; TBI: periodically adding sites ON lAND
 end
 
 to wood-updateStandingStock ;;Needs to be run every year (2 ticks). Patches with wood-age 0 don't get any wood on them.
-  ask patches [
     set wood-standingStock wood-maxStandingStock * (1 - exp (wood-varB * wood-age)) ^ wood-varC
-  ]
-
 end
 
 to regenerate
@@ -251,6 +267,9 @@ to regenerate
       set food-fertility food-fertility + (food-fertility * regeneration-rate)
     ]
   ]
+end
+
+to burn-resources   ;; every tick communities use (part of) available food, clay and wood to sustain themselves
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
