@@ -39,8 +39,8 @@ patches-own [
   wood-standingStock
   wood-varB; B and C are the two other variables needed for the Chapman-Richards model.They are considered constant per patch
   wood-varC
-  food
   food-fertility ;; crop yield on a cultivated patch (tons/(year*ha))
+  original-food-value ;; variable to allow food to be regenerated to the original value
   clay ;; variable defining whether or not a patch can be a clay source
   clay-quality
   land?
@@ -48,9 +48,12 @@ patches-own [
 
 communities-own [
   population
+  energy-stock   ;; cumulative stock of food brought in by households as available energy stock
 ]
 
-households-own []
+households-own [
+  food-carry ;; variable to allow transfer of food from fields to settlement
+]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                SETUP & GO                      ;;
@@ -70,6 +73,7 @@ to go
   tick
   energy-availability
   exploit-resources
+  regenerate
   add-sites
   if ticks = time-limit [stop]
 end
@@ -121,7 +125,7 @@ to setup-communities
   let max-elevation max [elevation] of patches ;; find highest elevation value of patches in each run
   let highest patches with [elevation > (max-elevation / 2) and land? = true] ;; sites located on higher elevation are favoured, but rather crude for now. Must be on land.
   create-communities communities-number [
-    while [any? other communities in-radius buffer-zone] [    ;; no sites can be created within the pre-defined buffer zone of other sites
+    while [any? other communities in-radius territory] [    ;; no sites can be created within the pre-defined buffer zone of other sites
       move-to one-of highest
     ]
     set shape "house"
@@ -154,7 +158,7 @@ to setup-communities
           ;set label Site
       ]
     ]
-  ]
+   ]
   ]
 end
 
@@ -163,6 +167,7 @@ to setup-households ;; creates a total population through number defined by slid
     hatch-households population [
       set shape "person"
       set size 1
+      set food-carry 0
      ]
     ]
 end
@@ -175,7 +180,7 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
     ]
     [
       set wood-age 0
-      set food-fertility 0
+      set original-food-value food-fertility
     ]
   ]
 
@@ -198,11 +203,30 @@ end
 
 to exploit-resources
   ;; TBI: Bi-annual ticks --> different resources exploited
+  ifelse ticks mod 2 = 0 [        ;; alternate between food exploitation and clay/wood
+  ;; every two ticks (i.e. once per year) households move to farms to exploit all available resources and move back to settlement
   ask households [
-    ;; TBI: walking costs need to be implemented
-
+    pen-down  ;; check whether agents are moving
+    let homebase patch-here
+    move-to one-of patches in-radius territory
+    let food-exploit 0
+    ask patch-here [
+      set food-exploit food-fertility
+    ; print food-exploit ;; check
+      set food-fertility 0    ;; basic assumption of exploiting all available food
+    ]
+    set food-carry food-carry + food-exploit
+    move-to homebase
+    ask communities-here [
+        set energy-stock energy-stock + [food-carry] of myself
+      ]
+    ]
   ]
 
+  [
+    ;; implement clay/wood exploitation
+  ]
+  ;; TBI: walking costs need to be implemented
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
 
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
@@ -218,6 +242,15 @@ to wood-updateStandingStock ;;Needs to be run every year (2 ticks). Patches with
     set wood-standingStock wood-maxStandingStock * (1 - exp (wood-varB * wood-age)) ^ wood-varC
   ]
 
+end
+
+to regenerate
+  ask patches [
+    if food-fertility < original-food-value [
+;      ifelse
+      set food-fertility food-fertility + (food-fertility * regeneration-rate)
+    ]
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -301,8 +334,8 @@ SLIDER
 191
 180
 224
-buffer-zone
-buffer-zone
+territory
+territory
 0
 200
 50.0
@@ -351,6 +384,36 @@ real-communities
 0
 1
 -1000
+
+SLIDER
+8
+259
+180
+292
+regeneration-rate
+regeneration-rate
+0
+1
+0.1
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+7
+291
+179
+324
+fallow-time
+fallow-time
+0
+5
+2.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
