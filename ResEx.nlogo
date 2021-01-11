@@ -1,8 +1,7 @@
 ;;;; Next steps to be implemented:
-;; resource exploitation
+;; clay & wood exploitation
 ;; site dynamics: periodic addition of new site + buffer catchment zone per site
 ;; implement site sizes according to archaeological survey data?
-;; correlation resource quality with elevation
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -39,18 +38,26 @@ patches-own [
   wood-standingStock
   wood-varB; B and C are the two other variables needed for the Chapman-Richards model.They are considered constant per patch
   wood-varC
-  food
   food-fertility ;; crop yield on a cultivated patch (tons/(year*ha))
-  clay ;; variable defining whether or not a patch can be a clay source
+  original-food-value ;; variable to allow food to be regenerated to the original value
+  clay? ;; variable defining whether or not a patch can be a clay source
   clay-quality
+  clay-quantity
   land?
 ]
 
 communities-own [
   population
+  energy-stock   ;; cumulative stock of food brought in by households
+  clay-stock     ;; cumulative stock of clay brought in by households
+  wood-stock     ;; cumulative stock of wood brought in by households
 ]
 
-households-own []
+households-own [
+  food-carry ;; variable to allow transfer of food from fields to community
+  clay-carry ;; variable to allow transfer of clay from quarries to community
+  wood-carry ;; variable to allow transfer of wood from forests to community
+]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                SETUP & GO                      ;;
@@ -67,10 +74,12 @@ to setup
 end
 
 to go
-  tick
+  add-sites
   energy-availability
   exploit-resources
-  add-sites
+  burn-resources
+  regenerate
+  tick
   if ticks = time-limit [stop]
 end
 
@@ -121,7 +130,7 @@ to setup-communities
   let max-elevation max [elevation] of patches ;; find highest elevation value of patches in each run
   let highest patches with [elevation > (max-elevation / 2) and land? = true] ;; sites located on higher elevation are favoured, but rather crude for now. Must be on land.
   create-communities communities-number [
-    while [any? other communities in-radius buffer-zone] [    ;; no sites can be created within the pre-defined buffer zone of other sites
+    while [any? other communities in-radius territory] [    ;; no sites can be created within the pre-defined buffer zone of other sites
       move-to one-of highest
     ]
     set shape "house"
@@ -154,7 +163,7 @@ to setup-communities
           ;set label Site
       ]
     ]
-  ]
+   ]
   ]
 end
 
@@ -162,9 +171,11 @@ to setup-households ;; creates a total population through number defined by slid
   ask communities [
     hatch-households population [
       set shape "person"
-      set size 1
+      set size 5
+      set food-carry 0
      ]
     ]
+ ; print count households
 end
 
 to setup-resources ;; already included in GIS step that wood or food cannot grow on water.
@@ -175,20 +186,20 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
     ]
     [
       set wood-age 0
-      set food-fertility 0
     ]
-  ]
 
-  ask patches [
     set wood-varB -1 * (0.011 + random-float 0.034)
     set wood-varC 1.07 + random-float 0.46
-  ]
 
   wood-updateStandingStock
+  set original-food-value food-fertility
+  ]
 
-  ask n-of 10000 patches [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
-    set clay true
-    set clay-quality random 100  ;; TBI: quality random for now but needs to made dependent on altitude
+  ask n-of 1000 patches with [land? = true] [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
+    set clay? true
+    set pcolor black
+    set clay-quality random 100  ;; TBI: quality random for now but needs to be made dependent on altitude
+    set clay-quantity random 100
   ]
 end
 
@@ -197,12 +208,61 @@ to energy-availability  ;; every community checks energy availability to determi
 end
 
 to exploit-resources
-  ;; TBI: Bi-annual ticks --> different resources exploited
+  ifelse ticks mod 2 = 0 [        ;; alternate between food exploitation and clay/wood
+  ;; every two ticks (i.e. once per year) households move to farms to exploit all available resources and move back to settlement
   ask households [
-    ;; TBI: walking costs need to be implemented
-
+   ; print "I am going to get food"
+    pen-down  ;; check whether agents are moving
+    let homebase patch-here
+    move-to one-of patches in-radius territory with [land? = true]
+    let food-exploited 0
+    ask patch-here [
+      set food-exploited food-fertility
+    ; print food-exploit ;; check
+      set food-fertility 0    ;; basic assumption of exploiting all available food
+    ]
+    set food-carry food-exploited
+    move-to homebase
+    ask communities-here [
+        set energy-stock energy-stock + [food-carry] of myself
+      ]
+    ]
   ]
 
+  [
+    ask households [
+      pen-down
+   ;   print "I want WOOOOODDD"
+      let homebase patch-here
+      ifelse random 2 > 0 [
+         move-to one-of patches in-radius territory with [clay? = true]  ;; TBI: search for highest quality clays in function of distance from site
+         let clay-exploited 0
+         ask patch-here [
+           set clay-exploited (clay-quantity / 10)  ;; TBI: for now random 10% of source exploited, what would be realistic?
+           set clay-quantity clay-quantity - (clay-quantity / 10)
+         ]
+         set clay-carry clay-exploited
+         move-to homebase
+         ask communities-here [
+          set clay-stock clay-stock + [clay-carry] of myself
+          ]
+        ]
+        [
+        move-to one-of patches in-radius territory with [wood-standingStock > 0] ;;TBI: search for quality trees
+        let wood-exploited 0
+        ask patch-here [
+          set wood-exploited wood-standingStock
+          set wood-standingStock 0  ;; assumption that all wood from the exploited patch is collected
+        ]
+        set wood-carry wood-exploited
+        move-to homebase
+        ask communities-here [
+          set wood-stock wood-stock + [wood-carry] of myself
+         ]
+        ]
+     ]
+  ]
+  ;; TBI: walking costs need to be implemented
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
 
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
@@ -214,10 +274,18 @@ to add-sites ;; TBI: periodically adding sites ON lAND
 end
 
 to wood-updateStandingStock ;;Needs to be run every year (2 ticks). Patches with wood-age 0 don't get any wood on them.
-  ask patches [
     set wood-standingStock wood-maxStandingStock * (1 - exp (wood-varB * wood-age)) ^ wood-varC
-  ]
+end
 
+to regenerate
+  ask patches [
+    if food-fertility < original-food-value [
+      set food-fertility food-fertility + (food-fertility * regeneration-rate)   ;; TBI: very basic regeneration rate of 10% per tick now. Needs to be checked + implemented for wood as well
+    ]
+  ]
+end
+
+to burn-resources   ;; every tick communities use (part of) available food, clay and wood to sustain themselves
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -301,8 +369,8 @@ SLIDER
 191
 180
 224
-buffer-zone
-buffer-zone
+territory
+territory
 0
 200
 50.0
@@ -351,6 +419,36 @@ real-communities
 0
 1
 -1000
+
+SLIDER
+8
+259
+180
+292
+regeneration-rate
+regeneration-rate
+0
+1
+0.1
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+7
+291
+179
+324
+fallow-time
+fallow-time
+0
+5
+2.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
