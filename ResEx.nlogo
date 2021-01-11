@@ -42,6 +42,7 @@ patches-own [
   original-food-value ;; variable to allow food to be regenerated to the original value
   clay? ;; variable defining whether or not a patch can be a clay source
   clay-quality
+  clay-quantity
   land?
 ]
 
@@ -191,14 +192,14 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
     set wood-varC 1.07 + random-float 0.46
 
   wood-updateStandingStock
-
   set original-food-value food-fertility
   ]
 
   ask n-of 1000 patches with [land? = true] [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
     set clay? true
     set pcolor black
-    set clay-quality random 100  ;; TBI: quality random for now but needs to made dependent on altitude
+    set clay-quality random 100  ;; TBI: quality random for now but needs to be made dependent on altitude
+    set clay-quantity random 100
   ]
 end
 
@@ -207,20 +208,20 @@ to energy-availability  ;; every community checks energy availability to determi
 end
 
 to exploit-resources
-  ;; TBI: Bi-annual ticks --> different resources exploited
   ifelse ticks mod 2 = 0 [        ;; alternate between food exploitation and clay/wood
   ;; every two ticks (i.e. once per year) households move to farms to exploit all available resources and move back to settlement
   ask households [
-  ;  pen-down  ;; check whether agents are moving
+   ; print "I am going to get food"
+    pen-down  ;; check whether agents are moving
     let homebase patch-here
-    move-to one-of patches in-radius territory
-    let food-exploit 0
+    move-to one-of patches in-radius territory with [land? = true]
+    let food-exploited 0
     ask patch-here [
-      set food-exploit food-fertility
+      set food-exploited food-fertility
     ; print food-exploit ;; check
       set food-fertility 0    ;; basic assumption of exploiting all available food
     ]
-    set food-carry food-carry + food-exploit
+    set food-carry food-exploited
     move-to homebase
     ask communities-here [
         set energy-stock energy-stock + [food-carry] of myself
@@ -230,20 +231,36 @@ to exploit-resources
 
   [
     ask households [
+      pen-down
+   ;   print "I want WOOOOODDD"
       let homebase patch-here
-      ifelse random 1 = 1 [
-         move-to one-of patches in-radius territory with [clay? = true]  ;; TBI: search for highest quality clays in function of distance
-         ;; exploit stuff
+      ifelse random 2 > 0 [
+         move-to one-of patches in-radius territory with [clay? = true]  ;; TBI: search for highest quality clays in function of distance from site
+         let clay-exploited 0
+         ask patch-here [
+           set clay-exploited (clay-quantity / 10)  ;; TBI: for now random 10% of source exploited, what would be realistic?
+           set clay-quantity clay-quantity - (clay-quantity / 10)
+         ]
+         set clay-carry clay-exploited
          move-to homebase
-        ;; transfer to community
+         ask communities-here [
+          set clay-stock clay-stock + [clay-carry] of myself
+          ]
         ]
         [
-        move-to one-of patches in-radius territory with [wood-standingStock > 0] ;;TBI: search for quality trees?
-        ;; exploit stuff
-        move-to homebase
-        ;; transfer to community
+        move-to one-of patches in-radius territory with [wood-standingStock > 0] ;;TBI: search for quality trees
+        let wood-exploited 0
+        ask patch-here [
+          set wood-exploited wood-standingStock
+          set wood-standingStock 0  ;; assumption that all wood from the exploited patch is collected
         ]
-    ]
+        set wood-carry wood-exploited
+        move-to homebase
+        ask communities-here [
+          set wood-stock wood-stock + [wood-carry] of myself
+         ]
+        ]
+     ]
   ]
   ;; TBI: walking costs need to be implemented
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
@@ -263,8 +280,7 @@ end
 to regenerate
   ask patches [
     if food-fertility < original-food-value [
-;      ifelse
-      set food-fertility food-fertility + (food-fertility * regeneration-rate)
+      set food-fertility food-fertility + (food-fertility * regeneration-rate)   ;; TBI: very basic regeneration rate of 10% per tick now. Needs to be checked + implemented for wood as well
     ]
   ]
 end
