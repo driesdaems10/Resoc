@@ -30,6 +30,7 @@ globals [
 
 breed [communities community]
 breed [households household]
+breed [rangers ranger]
 
 patches-own [
   elevation
@@ -44,6 +45,10 @@ patches-own [
   clay-quality
   clay-quantity
   land?
+  inRange-agriculture
+  inRange-forestry
+  cultivated?
+  walkingTime
 ]
 
 communities-own [
@@ -54,9 +59,15 @@ communities-own [
 ]
 
 households-own [
+  members
   food-carry ;; variable to allow transfer of food from fields to community
   clay-carry ;; variable to allow transfer of clay from quarries to community
   wood-carry ;; variable to allow transfer of wood from forests to community
+  parent     ;; variable that registers the breeder community
+]
+
+rangers-own [
+  claiming
 ]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -68,6 +79,7 @@ to setup
   import-map
   setup-topo
   setup-communities
+  setup-ranges
   setup-households
   setup-resources
   reset-ticks
@@ -109,6 +121,7 @@ to setup-topo
   ask patches [set elevation gis:raster-value elevation-raster pxcor (max-pycor - pycor) ]
   ;ask patches [set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)]
   ask patches [set wood-maxStandingStock gis:raster-value standingStock-raster pxcor (max-pycor - pycor)]
+  ask patches [set walkingTime gis:raster-value walkingTime-raster pxcor (max-pycor - pycor)]
   let e-min min [elevation] of patches
   let e-max max [elevation] of patches
   ask patches
@@ -167,12 +180,88 @@ to setup-communities
   ]
 end
 
+to setup-ranges ;; Sets up the areas reachable from the community in rough method at this stage, but boy, does it run.
+  ask patches [ ;; At larger distances from the source, there might be gaps because of the radial spreading. At this scale, fine.
+    set inRange-forestry [];; TBI: Patches are not yet linked to any particular community, only marked as "within range of a community".
+    set inRange-agriculture []
+  ]
+
+  ask communities[
+    let claim self
+    hatch-rangers 1 [
+     set shape "person"
+     set size 1
+     set claiming claim
+    ]
+  ]
+
+  ask rangers[
+    ;pen-down
+    let stronghold patch-here
+    let claimed claiming
+    foreach (range 0 360 1) [
+     x ->
+      let cost 0
+      let walking-units 1 ;; WalkingTime raster is expressed in hours: 1 hour max walking time
+      set heading x
+      while [walking-units >= 0][
+        fd 1
+        ask patch-here [
+         set cost walkingTime
+         ;set inRange-forestry? true
+         if (member? claimed inRange-forestry) = false [
+          set inRange-forestry sentence (inRange-forestry) claimed
+          ]
+        ]
+      set walking-units walking-units - cost
+      ]
+     move-to stronghold
+    ]
+  ]
+
+  ask rangers[
+    ;pen-down
+    let stronghold patch-here
+    let claimed claiming
+    foreach (range 0 360 1) [
+     x ->
+      let cost 0
+      let walking-units 0.50
+      set heading x
+      while [walking-units >= 0][
+        fd 1
+        ask patch-here [
+          set cost walkingTime
+          ;set inRange-agriculture? true
+          if (member? claimed inRange-agriculture) = false [
+          set inRange-agriculture sentence (inRange-agriculture) claimed
+          ]
+        ]
+      set walking-units walking-units - cost
+      ]
+     move-to stronghold
+    ]
+    die
+  ]
+
+ ask patches[
+    if land? = false [
+      set inRange-forestry []
+      set inRange-agriculture []
+    ]
+  ]
+end
+
 to setup-households ;; creates a total population through number defined by slider
   ask communities [
+    let claim self
     hatch-households population [
+      set members round random-normal household-size 0.5
       set shape "person"
       set size 5
       set food-carry 0
+      set wood-carry 0
+      set parent claim
      ]
     ]
  ; print count households
@@ -185,7 +274,7 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
       set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)
     ]
     [
-      set wood-age 0
+      set wood-maxStandingStock 0 ;; TBI: if community ever dies, reset wood-maxStandingStock
     ]
 
     set wood-varB -1 * (0.011 + random-float 0.034)
@@ -212,9 +301,9 @@ to exploit-resources
   ;; every two ticks (i.e. once per year) households move to farms to exploit all available resources and move back to settlement
   ask households [
    ; print "I am going to get food"
-    pen-down  ;; check whether agents are moving
+    pen-down
     let homebase patch-here
-    move-to one-of patches in-radius territory with [land? = true]
+    move-to one-of patches in-radius territory with [(member? parent inRange-agriculture)]
     let food-exploited 0
     ask patch-here [
       set food-exploited food-fertility
@@ -248,11 +337,12 @@ to exploit-resources
           ]
         ]
         [
-        move-to one-of patches in-radius territory with [wood-standingStock > 0] ;;TBI: search for quality trees
+        move-to one-of patches in-radius territory with [(wood-standingStock > 0) and (member? parent inRange-forestry)] ;;TBI: search for quality trees
         let wood-exploited 0
         ask patch-here [
           set wood-exploited wood-standingStock
           set wood-standingStock 0  ;; assumption that all wood from the exploited patch is collected
+          set wood-age 0 ;; necessary to reset forest growth
         ]
         set wood-carry wood-exploited
         move-to homebase
@@ -421,10 +511,10 @@ real-communities
 -1000
 
 SLIDER
-8
-259
-180
-292
+9
+368
+181
+401
 regeneration-rate
 regeneration-rate
 0
@@ -436,15 +526,30 @@ NIL
 HORIZONTAL
 
 SLIDER
-7
-291
-179
-324
+9
+334
+181
+367
 fallow-time
 fallow-time
 0
 5
 2.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+8
+260
+180
+293
+household-size
+household-size
+1
+12
+6.0
 1
 1
 NIL
