@@ -178,7 +178,7 @@ to setup-communities
           set size (population / 5)
           setxy long lat
           ;set label Site
-          ask patches in-radius territory [set pcolor random 100]
+          ;ask patches in-radius territory [set pcolor random 100]
       ]
     ]
    ]
@@ -268,10 +268,7 @@ to setup-households ;; creates a total population through number defined by slid
       set wood-carry 0
       set parent claim
      ]
-
-      ]
-
-    ]
+  ]
 end
 
 to setup-resources ;; already included in GIS step that wood or food cannot grow on water.
@@ -311,11 +308,9 @@ to exploit-resources
   ;; every two ticks (i.e. once per year) households move to farms to exploit all available resources and move back to settlement
   ask households [
    ; print "I am going to get food"
-;Delineate-woodland-and-agricultural-land
    ; pen-down  ;; check whether agents are moving
-
     let homebase patch-here
-    move-to one-of patches in-radius territory with [(member? parent inRange-agriculture)]
+    move-to one-of patches in-radius territory with ([member? parent inRange-agriculture])
     let food-exploited 0
     ask patch-here [
       set food-exploited food-fertility
@@ -329,7 +324,6 @@ to exploit-resources
       ]
     ]
   ]
-
   [
     ask households [
    ;   pen-down
@@ -349,20 +343,18 @@ to exploit-resources
           ]
         ]
         [
-;Delineate-woodland-and-agricultural-land
         move-to one-of patches in-radius territory with [(wood-standingStock > 0) and (member? parent inRange-forestry)] ;;TBI: search for quality trees
         let wood-exploited 0
         ask patch-here [
           set wood-exploited wood-standingStock
           set wood-standingStock 0  ;; assumption that all wood from the exploited patch is collected
           set wood-age 0 ;; necessary to reset forest growth
-;=======
-        ifelse any? patches with [wood-standingStock > 0] in-radius territory [
-          move-to one-of patches in-radius territory with [wood-standingStock > 0] ;;TBI: search for quality trees
-          let wood-exploited 0
-          ask patch-here [
-            set wood-exploited wood-standingStock
-            set wood-standingStock 0  ;; assumption that all wood from the exploited patch is collected
+ ;       ifelse any? patches with [wood-standingStock > 0] in-radius territory [
+ ;         move-to one-of patches in-radius territory with [wood-standingStock > 0] ;;TBI: search for quality trees
+ ;         let wood-exploited 0
+ ;         ask patch-here [
+ ;           set wood-exploited wood-standingStock
+ ;           set wood-standingStock 0  ;; assumption that all wood from the exploited patch is collected
           ]
           set wood-carry wood-exploited
           move-to homebase
@@ -370,14 +362,13 @@ to exploit-resources
             set wood-stock wood-stock + [wood-carry] of myself
            ]
           ]
-        [
-          ; do something if wood runs out
-          die
-
-        ]
+    ;    [
+    ;      ; do something if wood runs out
+    ;      die
+    ;    ]
         ]
        ]
-    ]
+
   ;; TBI: walking costs need to be implemented
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
 
@@ -537,10 +528,10 @@ real-communities
 -1000
 
 SLIDER
-9
-368
-181
-401
+8
+259
+180
+292
 regeneration-rate
 regeneration-rate
 0
@@ -552,11 +543,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-9
-334
-181
-367
-
+8
+291
+180
+324
 fallow-time
 fallow-time
 0
@@ -569,16 +559,31 @@ HORIZONTAL
 
 SLIDER
 8
-260
+323
 180
-293
+356
+clay-exploitation-rate
+clay-exploitation-rate
+0
+1
+0.1
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+8
+354
+180
+387
 household-size
 household-size
 1
 12
 6.0
 1
-
+1
 NIL
 HORIZONTAL
 
