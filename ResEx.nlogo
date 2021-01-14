@@ -26,6 +26,7 @@ globals [
   site-locations
   walkingTime-raster
   waterBodies-raster
+  regeneration-reserve
 ]
 
 breed [communities community]
@@ -47,8 +48,8 @@ patches-own [
   land?
   inRange-agriculture
   inRange-forestry
-  cultivated?
   walkingTime
+  growth-rate
 ]
 
 communities-own [
@@ -82,6 +83,7 @@ to setup
   setup-ranges
   setup-households
   setup-resources
+  setup-regeneration
   reset-ticks
 end
 
@@ -279,6 +281,7 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
     ]
     [
       set wood-maxStandingStock 0 ;; TBI: if community ever dies, reset wood-maxStandingStock
+      set food-fertility 0
     ]
     set wood-varB -1 * (0.011 + random-float 0.034)
     set wood-varC 1.07 + random-float 0.46
@@ -292,6 +295,18 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
     set pcolor black
     set clay-quality random 100  ;; TBI: quality random for now but needs to be made dependent on altitude
     set clay-quantity random 100
+  ]
+end
+
+to setup-regeneration
+  set regeneration-reserve 0.1 ;; required non-zero initialisation for Verhulst growth
+  ask patches with [original-food-value > 0] [
+    ifelse original-food-value > regeneration-reserve [
+      set growth-rate (1 / regeneration-time) * ln (99 * original-food-value / regeneration-reserve - 99)
+    ]
+    [
+      set growth-rate 0
+    ]
   ]
 end
 
@@ -310,12 +325,10 @@ to exploit-resources
     ;print "I am going to get food"
     ;pen-down
     let homebase patch-here
-    ;move-to one-of patches with [member? [parent] of myself inRange-agriculture]
     move-to max-one-of patches with [member? [parent] of myself inRange-agriculture][food-fertility]
     let food-exploited 0
     ask patch-here [
       set food-exploited food-fertility
-    ; print food-exploit
       set food-fertility 0    ;; basic assumption of exploiting all available food
     ]
     set food-carry food-exploited
@@ -328,7 +341,6 @@ to exploit-resources
   ]
   [
     ask households [
-   ;   pen-down
    ;   print "I want WOOOOODDD"
       let homebase patch-here
       ifelse random 2 > 0 [
@@ -345,7 +357,6 @@ to exploit-resources
           ]
         ]
         [
-        ;move-to one-of patches in-radius territory with [(wood-standingStock > 0) and (member? [parent] of myself inRange-forestry)]
         pen-down
         move-to max-one-of patches with [member? [parent] of myself inRange-forestry][wood-standingStock]
         let wood-exploited 0
@@ -359,7 +370,6 @@ to exploit-resources
           ask communities-here [
             set wood-stock wood-stock + [wood-carry] of myself
            ]
-        pen-up
           ]
         ]
        ]
@@ -370,6 +380,9 @@ to exploit-resources
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
   ;; TBI: if wood --> food and clay become possible after wood has been depleted or regrowth
   ;; TBI: if food --> tends to stay food? assume stability in agricultural plots?
+  ;; TBI: for example, initial wood may be removed during agricultural tick, then flag patch as agricultural for a number of ticks.
+  ;; TBI: predator-prey dynamics agriculture: don't reset fertility to zero when harvested, but gradually decline it and allow to regain itself if left alone.
+  ;; TBI: save computational power by eliminating household agentset.
 end
 
 to burn-resources   ;; every tick communities use (part of) available food, clay and wood to sustain themselves
@@ -379,7 +392,12 @@ to regenerate
   ifelse ticks mod 2 = 0 [
     ask patches [
       if food-fertility < original-food-value [
-        set food-fertility food-fertility + (food-fertility * regeneration-rate)   ;; TBI: very basic regeneration rate of 10% per tick now. Needs to be checked + implemented for wood as well
+        ifelse food-fertility > 0 [
+        set food-fertility food-fertility + (food-fertility * growth-rate * (1 - food-fertility / original-food-value))
+        ]
+        [
+        set food-fertility regeneration-reserve + (regeneration-reserve * growth-rate * (1 - regeneration-reserve / original-food-value))
+        ]
       ]
     ]
   ]
@@ -495,7 +513,7 @@ number-households
 number-households
 0
 500
-41.0
+25.0
 1
 1
 NIL
@@ -529,27 +547,12 @@ real-communities
 
 SLIDER
 8
-259
-180
-292
-regeneration-rate
-regeneration-rate
-0
-1
-0.1
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-8
 291
 180
 324
-fallow-time
-fallow-time
-0
+regeneration-time
+regeneration-time
+1
 5
 2.0
 1
@@ -586,6 +589,48 @@ household-size
 1
 NIL
 HORIZONTAL
+
+PLOT
+1014
+15
+1485
+217
+Crops harvested [tons per year and household]
+Time
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Valley, isolated" 1.0 0 -16777216 true "" "plot [energy-stock / (population * ticks / 2)] of community 7"
+"Valley, 1 other near" 1.0 0 -11221820 true "" "plot [energy-stock / (population * ticks / 2)] of community 2"
+"Mountain, 2 others near" 1.0 0 -10899396 true "" "plot [energy-stock / (population * ticks / 2)] of community 1"
+"Mountain, isolated" 1.0 0 -2674135 true "" "plot [energy-stock / (population * ticks / 2)] of community 8"
+
+PLOT
+1014
+228
+1486
+439
+Wood harvested [m³ per year and household]
+Time
+NIL
+0.0
+10.0
+0.0
+80.0
+true
+true
+"" ""
+PENS
+"Valley, isolated" 1.0 0 -16777216 true "" "plot [wood-stock / (population * ticks / 2)] of community 7"
+"Valley, 1 other near" 1.0 0 -11221820 true "" "plot [wood-stock / (population * ticks / 2)] of community 2"
+"Mountain, 2 others near" 1.0 0 -10899396 true "" "plot [wood-stock / (population * ticks / 2)] of community 1"
+"Mountain, isolated" 1.0 0 -2674135 true "" "plot [wood-stock / (population * ticks / 2)] of community 8"
 
 @#$#@#$#@
 ## WHAT IS IT?
