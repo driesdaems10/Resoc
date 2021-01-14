@@ -307,14 +307,15 @@ to exploit-resources
   ifelse ticks mod 2 = 0 [        ;; alternate between food exploitation and clay/wood
   ;; every two ticks (i.e. once per year) households move to farms to exploit all available resources and move back to settlement
   ask households [
-   ; print "I am going to get food"
-   ; pen-down  ;; check whether agents are moving
+    ;print "I am going to get food"
+    ;pen-down
     let homebase patch-here
-    move-to one-of patches in-radius territory with ([member? parent inRange-agriculture])
+    ;move-to one-of patches with [member? [parent] of myself inRange-agriculture]
+    move-to max-one-of patches with [member? [parent] of myself inRange-agriculture][food-fertility]
     let food-exploited 0
     ask patch-here [
       set food-exploited food-fertility
-    ; print food-exploit ;; check
+    ; print food-exploit
       set food-fertility 0    ;; basic assumption of exploiting all available food
     ]
     set food-carry food-exploited
@@ -322,6 +323,7 @@ to exploit-resources
     ask communities-here [
         set energy-stock energy-stock + [food-carry] of myself
       ]
+      pen-up
     ]
   ]
   [
@@ -343,33 +345,26 @@ to exploit-resources
           ]
         ]
         [
-        move-to one-of patches in-radius territory with [(wood-standingStock > 0) and (member? parent inRange-forestry)] ;;TBI: search for quality trees
+        ;move-to one-of patches in-radius territory with [(wood-standingStock > 0) and (member? [parent] of myself inRange-forestry)]
+        pen-down
+        move-to max-one-of patches with [member? [parent] of myself inRange-forestry][wood-standingStock]
         let wood-exploited 0
         ask patch-here [
           set wood-exploited wood-standingStock
-          set wood-standingStock 0  ;; assumption that all wood from the exploited patch is collected
-          set wood-age 0 ;; necessary to reset forest growth
- ;       ifelse any? patches with [wood-standingStock > 0] in-radius territory [
- ;         move-to one-of patches in-radius territory with [wood-standingStock > 0] ;;TBI: search for quality trees
- ;         let wood-exploited 0
- ;         ask patch-here [
- ;           set wood-exploited wood-standingStock
- ;           set wood-standingStock 0  ;; assumption that all wood from the exploited patch is collected
+          set wood-standingStock 0  ;; all wood from exploited patch is collected
+          set wood-age 0 ;; reset forest growth
           ]
           set wood-carry wood-exploited
           move-to homebase
           ask communities-here [
             set wood-stock wood-stock + [wood-carry] of myself
            ]
+        pen-up
           ]
-    ;    [
-    ;      ; do something if wood runs out
-    ;      die
-    ;    ]
         ]
        ]
 
-  ;; TBI: walking costs need to be implemented
+  ;; TBI: walking costs can be further implemented
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
 
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
@@ -381,17 +376,22 @@ to burn-resources   ;; every tick communities use (part of) available food, clay
 end
 
 to regenerate
-  ask patches [
-    if food-fertility < original-food-value [
-      set food-fertility food-fertility + (food-fertility * regeneration-rate)   ;; TBI: very basic regeneration rate of 10% per tick now. Needs to be checked + implemented for wood as well
+  ifelse ticks mod 2 = 0 [
+    ask patches [
+      if food-fertility < original-food-value [
+        set food-fertility food-fertility + (food-fertility * regeneration-rate)   ;; TBI: very basic regeneration rate of 10% per tick now. Needs to be checked + implemented for wood as well
+      ]
     ]
+  ]
+  [
+    ask patches [wood-updateStandingStock]
   ]
 end
 
 to viz-exploitation
 end
 
-to wood-updateStandingStock ;;Needs to be run every year (2 ticks). Patches with wood-age 0 don't get any wood on them.
+to wood-updateStandingStock
     set wood-standingStock wood-maxStandingStock * (1 - exp (wood-varB * wood-age)) ^ wood-varC
 end
 @#$#@#$#@
@@ -495,7 +495,7 @@ number-households
 number-households
 0
 500
-100.0
+41.0
 1
 1
 NIL
