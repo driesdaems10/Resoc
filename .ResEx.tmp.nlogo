@@ -412,7 +412,7 @@ to regenerate
     ]
   ]
   [
-    ask patches [wood-updateStandingStock]
+    ask pwood-updateStandingStock
   ]
 end
 
@@ -420,9 +420,11 @@ to viz-exploitation
 end
 
 to wood-updateStandingStock
+  ask patches [
     if wood? = true [  ;; only patches that can still grow wood (e.g. not clay quarries) can regrow food
     set wood-standingStock wood-maxStandingStock * (1 - exp (wood-varB * wood-age)) ^ wood-varC
     ]
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
