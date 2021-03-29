@@ -10,6 +10,7 @@
 
 ;; = regular comment
 ;; TBI = To Be Implemented
+;; TEST TEST GITHUB
 
 extensions [
   gis
@@ -226,6 +227,7 @@ to setup-ranges ;; Sets up the areas reachable from the community in rough metho
       ]
      move-to stronghold
     ]
+    die
   ]
 
   ask rangers[
