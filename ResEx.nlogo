@@ -10,7 +10,7 @@
 
 ;; = regular comment
 ;; TBI = To Be Implemented
-;; TEST TEST GITHUB
+;; TEST TEST GITHUB for DIGITAL ARCHAEOLOGY
 
 extensions [
   gis
