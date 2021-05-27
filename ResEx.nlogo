@@ -71,6 +71,7 @@ households-own [
   clay-carry ;; variable to allow transfer of clay from quarries to community
   wood-carry ;; variable to allow transfer of wood from forests to community
   parent     ;; variable that registers the breeder community
+  candidate-patches ;; patches that are within range of the community.
 ]
 
 rangers-own [
@@ -241,6 +242,7 @@ end
 to setup-households ;; creates a total population through number defined by slider
   ask communities [
     let claim self
+    let claimed-patches patches with [member? claim in-range-of and any? communities-here = false]
     hatch-households population [
       set members round random-normal household-size 0.5
       set shape "person"
@@ -248,6 +250,7 @@ to setup-households ;; creates a total population through number defined by slid
       set food-carry 0
       set wood-carry 0
       set parent claim
+      set candidate-patches claimed-patches
      ]
   ]
 end
@@ -303,8 +306,6 @@ to exploit-resources
     ask households [
     ;print "I am going to get food"
       pen-down
-      let homebase patch-here
-      let candidate-patches patch-set patches with [member? [parent] of myself in-range-of and any? communities-here = false]
       move-to max-one-of candidate-patches [food-fertility / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best food / walking cost ratio
       let food-exploited 0
       ask patch-here [
@@ -312,7 +313,7 @@ to exploit-resources
         set food-fertility 0    ;; basic assumption of exploiting all available food
       ]
       set food-carry food-exploited
-      move-to homebase
+      move-to parent
       ask communities-here [
         set energy-stock energy-stock + [food-carry] of myself
       ]
@@ -322,7 +323,6 @@ to exploit-resources
   [
     ask households [
    ;   print "I want WOOOOODDD OR CLAAAAYYYY"
-      let homebase patch-here
       ifelse random 2 > 0 [
          move-to one-of patches in-radius territory with [clay? = true]  ;; TBI: search for highest quality clays in function of distance from site
          let clay-exploited 0
@@ -335,14 +335,13 @@ to exploit-resources
            set food? false
          ]
          set clay-carry clay-exploited
-         move-to homebase
+         move-to parent
          ask communities-here [
           set clay-stock clay-stock + [clay-carry] of myself
           ]
         ]
         [
         pen-down
-        let candidate-patches patch-set patches with [member? [parent] of myself in-range-of and any? communities-here = false]
         move-to max-one-of candidate-patches [wood-standingStock / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best standing stock / walking cost ratio
         let wood-exploited 0
         ask patch-here [
@@ -350,7 +349,7 @@ to exploit-resources
           set wood-standingStock 0  ;; all wood from exploited patch is collected
         ]
         set wood-carry wood-exploited
-        move-to homebase
+        move-to parent
         ask communities-here [
           set wood-stock wood-stock + [wood-carry] of myself
         ]
@@ -359,7 +358,6 @@ to exploit-resources
     ]
   ]
 
-  ;; TBI: walking costs can be further implemented
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
 
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
@@ -367,7 +365,6 @@ to exploit-resources
   ;; TBI: if food --> tends to stay food? assume stability in agricultural plots?
   ;; TBI: for example, initial wood may be removed during agricultural tick, then flag patch as agricultural for a number of ticks.
   ;; TBI: predator-prey dynamics agriculture: don't reset fertility to zero when harvested, but gradually decline it and allow to regain itself if left alone.
-  ;; TBI: save computational power by eliminating household agentset.
   ;; TBI: save initialization time by only loading GIS datasets once. (export-import world) Only subsequent steps are repeated at later Setup procedures.
   ;; TBI: set walking cost of lakes to high number, so they become obstacles. Rivers would probably have been crossed readily.
 end
@@ -402,12 +399,16 @@ to wood-updateStandingStock
   if wood? = true [  ;; only patches that can still grow wood (e.g. not clay quarries) can regrow food
     let wood-growth 0
     if wood-standingStock < wood-maxStandingStock [
-      set wood-growth wood-resA * (1 - exp (- wood-standingStock * wood-resB))
+      ifelse wood-standingStock = 0 [
+        set wood-growth 0.3835 ;; mean starting growth value from GREFOS. Required because formula causes growth to stay zero when zero standing stock
+      ]
+      [
+        set wood-growth wood-resA * (1 - exp (- wood-standingStock * wood-resB))
+      ]
     ]
     set wood-standingStock wood-standingStock + wood-growth
   ]
 end
-
 
 
 
