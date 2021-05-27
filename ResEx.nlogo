@@ -23,7 +23,9 @@ globals [
   year
   elevation-raster
   fertility-raster
-  standingStock-raster
+  maxStandingStock-raster
+  resA-raster
+  resB-raster
   IA-sites
   site-locations
   walkingTime-raster
@@ -37,11 +39,11 @@ breed [rangers ranger]
 
 patches-own [
   elevation
-  wood-age ;; all patches are forest initially and are therefore given an age corresponding to a more or less mature forest. When cut, forest age is reset to zero.
-  wood-maxStandingStock ;; upper limit to usable wood contained within a forested patch (m³/ha). Variable A in the Chapman-Richards equation.
-  wood-standingStock
-  wood-varB; B and C are the two other variables needed for the Chapman-Richards model. They are considered constant per patch
-  wood-varC
+  ;wood-age ;; all patches are forest initially and are therefore given an age corresponding to a more or less mature forest. When cut, forest age is reset to zero.
+  wood-maxStandingStock ;; upper limit to usable wood contained within a forested patch (m³/ha). Calculated from GREFOS model runs, input via map.
+  wood-standingStock ;; actual standing stock on a patch at a given time (m³/ha). Calculated from forest growth function.
+  wood-resA ;; upper limit to forest growth (m³/ha*year). Calculated from GREFOS model runs, input via map.
+  wood-resB ;; growth rate of forest stock (m³/m³*ha*year). Calculated from GREFOS model runs, input via map.
   wood? ;; variable to allow for wood regeneration
   food-fertility ;; crop yield on a cultivated patch (tons/(year*ha))
   original-food-value ;; variable to allow food to be regenerated to the original value
@@ -120,7 +122,9 @@ to import-map
   ]
   set elevation-raster gis:load-dataset "/data/Altitude_EPSG32636_Clipped_Resampled2.asc"
   set fertility-raster gis:load-dataset "/data/fertilityFromRegressionWaterwaysExcluded_EPSG32636_Clipped_Resampled2.asc"
-  set standingStock-raster gis:load-dataset "/data/forestStandingStockWaterwaysExcluded_EPSG36326_Clipped_Resampled2.asc"
+  set maxStandingStock-raster gis:load-dataset "/data/MaxStandingStock_GREFOS_EPSG32636_Clipped_Resampled2.asc"
+  set resA-raster gis:load-dataset "/data/resAMap_GREFOS_EPSG32636_Clipped_Resampled2.asc"
+  set resB-raster gis:load-dataset "/data/resBMap_GREFOS_EPSG32636_Clipped_Resampled2.asc"
   set walkingTime-raster gis:load-dataset "/data/Tobler_EPSG32636.asc"
   set waterBodies-raster gis:load-dataset "/data/lakesAndRiversRasterized_EPSG32636_Clipped.asc"
 
@@ -133,9 +137,10 @@ end
 
 to setup-topo
   ask patches [set elevation gis:raster-value elevation-raster pxcor (max-pycor - pycor) ]
-  ;ask patches [set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)]
-  ask patches [set wood-maxStandingStock gis:raster-value standingStock-raster pxcor (max-pycor - pycor)]
+  ask patches [set wood-maxStandingStock gis:raster-value maxStandingStock-raster pxcor (max-pycor - pycor)]
   ask patches [set walkingTime gis:raster-value walkingTime-raster pxcor (max-pycor - pycor)]
+  ask patches [set wood-resA gis:raster-value resA-raster pxcor (max-pycor - pycor)]
+  ask patches [set wood-resB gis:raster-value resB-raster pxcor (max-pycor - pycor)]
   let e-min min [elevation] of patches
   let e-max max [elevation] of patches
   ask patches
@@ -148,6 +153,7 @@ to setup-topo
     ]
     [ set pcolor blue
       set land? false
+      set wood-maxStandingStock 0
     ]
   ]
 end
@@ -251,15 +257,13 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
     ifelse not any? communities-here [    ;; settled patches are not forested and not suited for agriculture
       set wood? true
       set food? true
-      set wood-age 100 + random 300 ;; all non-settled patches are more or less mature forest at the start
+      set wood-standingStock 0.5 * wood-maxStandingStock + random-float 0.5 * wood-maxStandingStock;; all non-settled patches are more or less mature forest at the start
       set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)
     ]
     [
       set wood-maxStandingStock 0 ;; TBI: if community ever dies, reset wood-maxStandingStock
       set food-fertility 0
     ]
-    set wood-varB -1 * (0.011 + random-float 0.034)
-    set wood-varC 1.07 + random-float 0.46
 
   wood-updateStandingStock
   set original-food-value food-fertility
@@ -344,7 +348,6 @@ to exploit-resources
         ask patch-here [
           set wood-exploited wood-standingStock
           set wood-standingStock 0  ;; all wood from exploited patch is collected
-          set wood-age 0 ;; reset forest growth
         ]
         set wood-carry wood-exploited
         move-to homebase
@@ -366,6 +369,7 @@ to exploit-resources
   ;; TBI: predator-prey dynamics agriculture: don't reset fertility to zero when harvested, but gradually decline it and allow to regain itself if left alone.
   ;; TBI: save computational power by eliminating household agentset.
   ;; TBI: save initialization time by only loading GIS datasets once. (export-import world) Only subsequent steps are repeated at later Setup procedures.
+  ;; TBI: set walking cost of lakes to high number, so they become obstacles. Rivers would probably have been crossed readily.
 end
 
 to burn-resources   ;; every tick communities use (part of) available food, clay and wood to sustain themselves
@@ -396,9 +400,29 @@ end
 
 to wood-updateStandingStock
   if wood? = true [  ;; only patches that can still grow wood (e.g. not clay quarries) can regrow food
-  set wood-standingStock wood-maxStandingStock * (1 - exp (wood-varB * wood-age)) ^ wood-varC
+    let wood-growth 0
+    if wood-standingStock < wood-maxStandingStock [
+      set wood-growth wood-resA * (1 - exp (- wood-standingStock * wood-resB))
+    ]
+    set wood-standingStock wood-standingStock + wood-growth
   ]
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 201
