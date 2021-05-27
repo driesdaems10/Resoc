@@ -10,6 +10,7 @@
 
 ;; = regular comment
 ;; TBI = To Be Implemented
+;; TEST TEST GITHUB for DIGITAL ARCHAEOLOGY
 
 extensions [
   gis
@@ -40,8 +41,10 @@ patches-own [
   wood-standingStock
   wood-varB; B and C are the two other variables needed for the Chapman-Richards model.They are considered constant per patch
   wood-varC
+  wood? ;; variable to allow for wood regeneration
   food-fertility ;; crop yield on a cultivated patch (tons/(year*ha))
   original-food-value ;; variable to allow food to be regenerated to the original value
+  food? ;; variable to allow for food regeneration
   clay? ;; variable defining whether or not a patch can be a clay source
   clay-quality
   clay-quantity
@@ -224,6 +227,7 @@ to setup-ranges ;; Sets up the areas reachable from the community in rough metho
       ]
      move-to stronghold
     ]
+    die
   ]
 
   ask rangers[
@@ -276,6 +280,8 @@ end
 to setup-resources ;; already included in GIS step that wood or food cannot grow on water.
   ask patches [
     ifelse not any? communities-here [    ;; settled patches are not forested and not suited for agriculture
+      set wood? true
+      set food? true
       set wood-age 100 + random 300 ;; all non-settled patches are more or less mature forest at the start
       set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)
     ]
@@ -341,7 +347,7 @@ to exploit-resources
   ]
   [
     ask households [
-   ;   print "I want WOOOOODDD"
+   ;   print "I want WOOOOODDD OR CLAAAAYYYY"
       let homebase patch-here
       ifelse random 2 > 0 [
          move-to one-of patches in-radius territory with [clay? = true]  ;; TBI: search for highest quality clays in function of distance from site
@@ -349,6 +355,10 @@ to exploit-resources
          ask patch-here [
            set clay-exploited (clay-quantity * clay-exploitation-rate)  ;; TBI: for now random 10% of source exploited, what would be realistic?
            set clay-quantity clay-quantity - (clay-quantity * clay-exploitation-rate)
+           set food-fertility 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
+           set wood-standingStock 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
+           set wood? false
+           set food? false
          ]
          set clay-carry clay-exploited
          move-to homebase
@@ -391,6 +401,7 @@ end
 to regenerate
   ifelse ticks mod 2 = 0 [
     ask patches [
+      if food? = true [  ;; only patches that can still grow food (e.g. not clay quarries) can regrow food
       if food-fertility < original-food-value [
         ifelse food-fertility > 0 [
         set food-fertility food-fertility + (food-fertility * growth-rate * (1 - food-fertility / original-food-value))
@@ -398,6 +409,7 @@ to regenerate
         [
         set food-fertility regeneration-reserve + (regeneration-reserve * growth-rate * (1 - regeneration-reserve / original-food-value))
         ]
+      ]
       ]
     ]
   ]
@@ -410,7 +422,9 @@ to viz-exploitation
 end
 
 to wood-updateStandingStock
+    if wood? = true [  ;; only patches that can still grow wood (e.g. not clay quarries) can regrow food
     set wood-standingStock wood-maxStandingStock * (1 - exp (wood-varB * wood-age)) ^ wood-varC
+    ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
