@@ -15,6 +15,7 @@
 extensions [
   gis
   palette
+  nw
 ]
 
 globals [
@@ -22,7 +23,9 @@ globals [
   year
   elevation-raster
   fertility-raster
-  standingStock-raster
+  maxStandingStock-raster
+  resA-raster
+  resB-raster
   IA-sites
   site-locations
   walkingTime-raster
@@ -36,23 +39,23 @@ breed [rangers ranger]
 
 patches-own [
   elevation
-  wood-age ;; all patches are forest initially and are therefore given an age corresponding to a more or less mature forest. When cut, forest age is reset to zero.
-  wood-maxStandingStock ;; upper limit to usable wood contained within a forested patch (m³/ha). Variable A in the Chapman-Richards equation.
-  wood-standingStock
-  wood-varB; B and C are the two other variables needed for the Chapman-Richards model.They are considered constant per patch
-  wood-varC
+  ;wood-age ;; all patches are forest initially and are therefore given an age corresponding to a more or less mature forest. When cut, forest age is reset to zero.
+  wood-maxStandingStock ;; upper limit to usable wood contained within a forested patch (m³/ha). Calculated from GREFOS model runs, input via map.
+  wood-standingStock ;; actual standing stock on a patch at a given time (m³/ha). Calculated from forest growth function.
+  wood-resA ;; upper limit to forest growth (m³/ha*year). Calculated from GREFOS model runs, input via map.
+  wood-resB ;; growth rate of forest stock (m³/m³*ha*year). Calculated from GREFOS model runs, input via map.
   wood? ;; variable to allow for wood regeneration
   food-fertility ;; crop yield on a cultivated patch (tons/(year*ha))
   original-food-value ;; variable to allow food to be regenerated to the original value
   food? ;; variable to allow for food regeneration
+  growth-rate ;; crop growth rate in Verhulst function. Determined on the base of the regeneration-time variable
   clay? ;; variable defining whether or not a patch can be a clay source
   clay-quality
   clay-quantity
-  land?
-  inRange-agriculture
-  inRange-forestry
-  walkingTime
-  growth-rate
+  land? ;; variable defining whether or not the patch is on land
+  walkingTime ;; amount of time required to cross a patch (from preprocessed raster)
+  in-range-of ;; list of communities that could potentially make use of this patch for agriculture or forestry
+  claimed-cost ;; walking time cost from community to its claimed patches in same order as "claimed" list
 ]
 
 communities-own [
@@ -68,12 +71,17 @@ households-own [
   clay-carry ;; variable to allow transfer of clay from quarries to community
   wood-carry ;; variable to allow transfer of wood from forests to community
   parent     ;; variable that registers the breeder community
+  candidate-patches ;; patches that are within range of the community.
 ]
 
 rangers-own [
   claiming
+  walkingCost
 ]
 
+links-own [
+  weight
+]
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                SETUP & GO                      ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -83,7 +91,7 @@ to setup
   import-map
   setup-topo
   setup-communities
-  setup-ranges
+  setup-least-cost-distances
   setup-households
   setup-resources
   setup-regeneration
@@ -115,7 +123,9 @@ to import-map
   ]
   set elevation-raster gis:load-dataset "/data/Altitude_EPSG32636_Clipped_Resampled2.asc"
   set fertility-raster gis:load-dataset "/data/fertilityFromRegressionWaterwaysExcluded_EPSG32636_Clipped_Resampled2.asc"
-  set standingStock-raster gis:load-dataset "/data/forestStandingStockWaterwaysExcluded_EPSG36326_Clipped_Resampled2.asc"
+  set maxStandingStock-raster gis:load-dataset "/data/MaxStandingStock_GREFOS_EPSG32636_Clipped_Resampled2.asc"
+  set resA-raster gis:load-dataset "/data/resAMap_GREFOS_EPSG32636_Clipped_Resampled2.asc"
+  set resB-raster gis:load-dataset "/data/resBMap_GREFOS_EPSG32636_Clipped_Resampled2.asc"
   set walkingTime-raster gis:load-dataset "/data/Tobler_EPSG32636.asc"
   set waterBodies-raster gis:load-dataset "/data/lakesAndRiversRasterized_EPSG32636_Clipped.asc"
 
@@ -128,9 +138,10 @@ end
 
 to setup-topo
   ask patches [set elevation gis:raster-value elevation-raster pxcor (max-pycor - pycor) ]
-  ;ask patches [set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)]
-  ask patches [set wood-maxStandingStock gis:raster-value standingStock-raster pxcor (max-pycor - pycor)]
+  ask patches [set wood-maxStandingStock gis:raster-value maxStandingStock-raster pxcor (max-pycor - pycor)]
   ask patches [set walkingTime gis:raster-value walkingTime-raster pxcor (max-pycor - pycor)]
+  ask patches [set wood-resA gis:raster-value resA-raster pxcor (max-pycor - pycor)]
+  ask patches [set wood-resB gis:raster-value resB-raster pxcor (max-pycor - pycor)]
   let e-min min [elevation] of patches
   let e-max max [elevation] of patches
   ask patches
@@ -143,6 +154,7 @@ to setup-topo
     ]
     [ set pcolor blue
       set land? false
+      set wood-maxStandingStock 0
     ]
   ]
 end
@@ -190,82 +202,47 @@ to setup-communities
   ]
 end
 
-to setup-ranges ;; Sets up the areas reachable from the community in rough method at this stage, but boy, does it run.
-  ask patches [ ;; At larger distances from the source, there might be gaps because of the radial spreading. At this scale, fine.
-    set inRange-forestry [];; TBI: Patches are not yet linked to any particular community, only marked as "within range of a community".
-    set inRange-agriculture []
+to setup-least-cost-distances ;; Every community calculates the least-cost pathways to every patch in a certain search radius, taking the walkingTime raster into account.
+
+  ask patches [
+    set in-range-of []
+    set claimed-cost []
   ]
 
-  ask communities[
+  ask communities [
     let claim self
-    hatch-rangers 1 [
-     set shape "person"
-     set size 1
-     set claiming claim
-    ]
-  ]
-
-  ask rangers[
-    ;pen-down
-    let stronghold patch-here
-    let claimed claiming
-    foreach (range 0 360 1) [
-     x ->
-      let cost 0
-      let walking-units 1 ;; WalkingTime raster is expressed in hours: 1 hour max walking time
-      set heading x
-      while [walking-units >= 0][
-        fd 1
-        ask patch-here [
-         set cost walkingTime
-         ;set inRange-forestry? true
-         if (member? claimed inRange-forestry) = false [
-          set inRange-forestry sentence (inRange-forestry) claimed
-          ]
+    ask patches in-radius territory [ ;; Initial search radius of "territory" km: max distance a villager would walk to reach the fields on flat terrain (likely 5 km = 50 map units)
+      sprout-rangers 1 [ ;; Every patch in the search radius sprouts a ranger whose only goal it is to represent the patch they're on in a network
+        set claiming claim
+        set color white ;; Visualization of the process
+        set size 1
+        set walkingCost [walkingTime] of patch-here ;; Time necessary to cross patch (from the walkingTime raster) is transferred to ranger
+        create-links-with rangers-on neighbors [ ;; Every ranger links up with his neighbors
+          set weight 0.5 * sum [walkingCost] of both-ends ;; The weight of every link is the average of the walking time cost of both ends
         ]
-      set walking-units walking-units - cost
       ]
-     move-to stronghold
     ]
-    die
-  ]
-
-  ask rangers[
-    ;pen-down
-    let stronghold patch-here
-    let claimed claiming
-    foreach (range 0 360 1) [
-     x ->
-      let cost 0
-      let walking-units 0.50
-      set heading x
-      while [walking-units >= 0][
-        fd 1
-        ask patch-here [
-          set cost walkingTime
-          ;set inRange-agriculture? true
-          if (member? claimed inRange-agriculture) = false [
-          set inRange-agriculture sentence (inRange-agriculture) claimed
-          ]
+    let comX pxcor ;; Needed to indicate the ranger situated on the community patch
+    let comY pycor ;; Needed to indicate the ranger situated on the community patch
+    let home-ranger one-of rangers with [xcor = comX and ycor = comY] ;; Indicating the ranger on the community patch
+    ask rangers [ ;; Every ranger records on their patch what their least cost distance to the home ranger is
+      let LCD nw:weighted-distance-to home-ranger weight
+      let claimed claiming
+      ask patch-here [
+        if land? = true [
+          set in-range-of sentence (in-range-of) claimed
+          set claimed-cost sentence (claimed-cost) LCD
         ]
-      set walking-units walking-units - cost
       ]
-     move-to stronghold
     ]
-    die
-  ]
-
- ask patches[
-    if land? = false [
-      set inRange-forestry []
-      set inRange-agriculture []
-    ]
+    ask rangers [die] ;; Rangers don't have any other function in the model, so they are removed
   ]
 end
 
 to setup-households ;; creates a total population through number defined by slider
   ask communities [
     let claim self
+    let claimed-patches patches with [member? claim in-range-of and any? communities-here = false]
     hatch-households population [
       set members round random-normal household-size 0.5
       set shape "person"
@@ -273,6 +250,7 @@ to setup-households ;; creates a total population through number defined by slid
       set food-carry 0
       set wood-carry 0
       set parent claim
+      set candidate-patches claimed-patches
      ]
   ]
 end
@@ -282,15 +260,13 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
     ifelse not any? communities-here [    ;; settled patches are not forested and not suited for agriculture
       set wood? true
       set food? true
-      set wood-age 100 + random 300 ;; all non-settled patches are more or less mature forest at the start
+      set wood-standingStock 0.5 * wood-maxStandingStock + random-float 0.5 * wood-maxStandingStock;; all non-settled patches are more or less mature forest at the start
       set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)
     ]
     [
       set wood-maxStandingStock 0 ;; TBI: if community ever dies, reset wood-maxStandingStock
       set food-fertility 0
     ]
-    set wood-varB -1 * (0.011 + random-float 0.034)
-    set wood-varC 1.07 + random-float 0.46
 
   wood-updateStandingStock
   set original-food-value food-fertility
@@ -327,19 +303,18 @@ end
 to exploit-resources
   ifelse ticks mod 2 = 0 [        ;; alternate between food exploitation and clay/wood
   ;; every two ticks (i.e. once per year) households move to farms to exploit all available resources and move back to settlement
-  ask households [
+    ask households [
     ;print "I am going to get food"
-    ;pen-down
-    let homebase patch-here
-    move-to max-one-of patches with [member? [parent] of myself inRange-agriculture][food-fertility]
-    let food-exploited 0
-    ask patch-here [
-      set food-exploited food-fertility
-      set food-fertility 0    ;; basic assumption of exploiting all available food
-    ]
-    set food-carry food-exploited
-    move-to homebase
-    ask communities-here [
+      pen-down
+      move-to max-one-of candidate-patches [food-fertility / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best food / walking cost ratio
+      let food-exploited 0
+      ask patch-here [
+        set food-exploited food-fertility
+        set food-fertility 0    ;; basic assumption of exploiting all available food
+      ]
+      set food-carry food-exploited
+      move-to parent
+      ask communities-here [
         set energy-stock energy-stock + [food-carry] of myself
       ]
       pen-up
@@ -348,7 +323,6 @@ to exploit-resources
   [
     ask households [
    ;   print "I want WOOOOODDD OR CLAAAAYYYY"
-      let homebase patch-here
       ifelse random 2 > 0 [
          move-to one-of patches in-radius territory with [clay? = true]  ;; TBI: search for highest quality clays in function of distance from site
          let clay-exploited 0
@@ -361,30 +335,29 @@ to exploit-resources
            set food? false
          ]
          set clay-carry clay-exploited
-         move-to homebase
+         move-to parent
          ask communities-here [
           set clay-stock clay-stock + [clay-carry] of myself
           ]
         ]
         [
         pen-down
-        move-to max-one-of patches with [member? [parent] of myself inRange-forestry][wood-standingStock]
+        move-to max-one-of candidate-patches [wood-standingStock / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best standing stock / walking cost ratio
         let wood-exploited 0
         ask patch-here [
           set wood-exploited wood-standingStock
           set wood-standingStock 0  ;; all wood from exploited patch is collected
-          set wood-age 0 ;; reset forest growth
-          ]
-          set wood-carry wood-exploited
-          move-to homebase
-          ask communities-here [
-            set wood-stock wood-stock + [wood-carry] of myself
-           ]
-          ]
         ]
-       ]
+        set wood-carry wood-exploited
+        move-to parent
+        ask communities-here [
+          set wood-stock wood-stock + [wood-carry] of myself
+        ]
+        pen-up
+      ]
+    ]
+  ]
 
-  ;; TBI: walking costs can be further implemented
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
 
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
@@ -392,7 +365,8 @@ to exploit-resources
   ;; TBI: if food --> tends to stay food? assume stability in agricultural plots?
   ;; TBI: for example, initial wood may be removed during agricultural tick, then flag patch as agricultural for a number of ticks.
   ;; TBI: predator-prey dynamics agriculture: don't reset fertility to zero when harvested, but gradually decline it and allow to regain itself if left alone.
-  ;; TBI: save computational power by eliminating household agentset.
+  ;; TBI: save initialization time by only loading GIS datasets once. (export-import world) Only subsequent steps are repeated at later Setup procedures.
+  ;; TBI: set walking cost of lakes to high number, so they become obstacles. Rivers would probably have been crossed readily.
 end
 
 to burn-resources   ;; every tick communities use (part of) available food, clay and wood to sustain themselves
@@ -422,10 +396,34 @@ to viz-exploitation
 end
 
 to wood-updateStandingStock
-    if wood? = true [  ;; only patches that can still grow wood (e.g. not clay quarries) can regrow food
-    set wood-standingStock wood-maxStandingStock * (1 - exp (wood-varB * wood-age)) ^ wood-varC
+  if wood? = true [  ;; only patches that can still grow wood (e.g. not clay quarries) can regrow food
+    let wood-growth 0
+    if wood-standingStock < wood-maxStandingStock [
+      ifelse wood-standingStock = 0 [
+        set wood-growth 0.3835 ;; mean starting growth value from GREFOS. Required because formula causes growth to stay zero when zero standing stock
+      ]
+      [
+        set wood-growth wood-resA * (1 - exp (- wood-standingStock * wood-resB))
+      ]
     ]
+    set wood-standingStock wood-standingStock + wood-growth
+  ]
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 201
