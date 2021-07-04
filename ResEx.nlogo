@@ -19,15 +19,15 @@ extensions [
 ]
 
 globals [
-  coordsys?
-  year
-  elevation-raster
-  fertility-raster
+  coordsys? ; boolean variable for checking if default coordinate system (WGS84) for all spatial data is set
+  year                       ; STILL NECESSARY?? Used nowhere else in model
+  elevation-raster           ; elevation raster dataset
+  fertility-raster           ; fertility raster dataset
   maxStandingStock-raster
   resA-raster
   resB-raster
-  IA-sites
-  site-locations
+  IA-sites                   ; dataset with Iron Age site from area of Sagalassos
+  site-locations             ; STILL NECESSARY?? Used nowhere else in model
   walkingTime-raster
   waterBodies-raster
   regeneration-reserve
@@ -38,7 +38,7 @@ breed [households household]
 breed [rangers ranger]
 
 patches-own [
-  elevation
+  elevation   ;; elevation value
   ;wood-age ;; all patches are forest initially and are therefore given an age corresponding to a more or less mature forest. When cut, forest age is reset to zero.
   wood-maxStandingStock ;; upper limit to usable wood contained within a forested patch (m³/ha). Calculated from GREFOS model runs, input via map.
   wood-standingStock ;; actual standing stock on a patch at a given time (m³/ha). Calculated from forest growth function.
@@ -50,8 +50,8 @@ patches-own [
   food? ;; variable to allow for food regeneration
   growth-rate ;; crop growth rate in Verhulst function. Determined on the base of the regeneration-time variable
   clay? ;; variable defining whether or not a patch can be a clay source
-  clay-quality
-  clay-quantity
+  clay-quality  ;; quality of clay per source
+  clay-quantity ;; quantity of clay per source
   land? ;; variable defining whether or not the patch is on land
   walkingTime ;; amount of time required to cross a patch (from preprocessed raster)
   in-range-of ;; list of communities that could potentially make use of this patch for agriculture or forestry
@@ -59,10 +59,11 @@ patches-own [
 ]
 
 communities-own [
-  population
+  population     ;; population size
   energy-stock   ;; cumulative stock of food brought in by households
   clay-stock     ;; cumulative stock of clay brought in by households
   wood-stock     ;; cumulative stock of wood brought in by households
+  site-name      ;; value for site name if historical dataset is used
 ]
 
 households-own [
@@ -160,7 +161,7 @@ to setup-topo
 end
 
 to setup-communities
-  ifelse real-communities = false [
+  ifelse real-communities = false [           ;; depending on input from switch on interface. If false: random site creation
   let max-elevation max [elevation] of patches ;; find highest elevation value of patches in each run
   let highest patches with [elevation > (max-elevation / 2) and land? = true] ;; sites located on higher elevation are favoured, but rather crude for now. Must be on land.
   create-communities communities-number [
@@ -171,10 +172,10 @@ to setup-communities
     ;; set population size based on a random number drawn from a normal distribution determined by slider on interface
     set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
     ;; average population currently set at 500  with sd 250
-    set size (population / 5)
+    set size sqrt (population / 5)
   ]
    ]
-  [
+  [                   ;; depending on input from switch on interface. If true: import Iran Age site dataset
     set IA-sites gis:load-dataset "/data/Iron Age sites.shp"
     let valid false
     foreach gis:property-names IA-sites [
@@ -191,10 +192,12 @@ to setup-communities
         let Site gis:property-value site-coord "Site"
         create-communities 1 [
           set shape "house"
-          set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
-          set size (population / 5)
+      ;    set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
+          set population round random-normal (number-households * household-size) (number-households / 2)
+       ;   print population
+          set size sqrt (population / 5)
           setxy long lat
-          ;set label Site
+          set site-name Site     ;; add site name
           ;ask patches in-radius territory [set pcolor random 100]
       ]
     ]
@@ -203,16 +206,14 @@ to setup-communities
 end
 
 to setup-least-cost-distances ;; Every community calculates the least-cost pathways to every patch in a certain search radius, taking the walkingTime raster into account.
-
   ask patches [
     set in-range-of []
     set claimed-cost []
-  ]
-
+   ]
   ask communities [
     let claim self
     ask patches in-radius territory [ ;; Initial search radius of "territory" km: max distance a villager would walk to reach the fields on flat terrain (likely 5 km = 50 map units)
-      sprout-rangers 1 [ ;; Every patch in the search radius sprouts a ranger whose only goal it is to represent the patch they're on in a network
+      sprout-rangers 1 [ ;; Every patch in the search radius sprouts a ranger whose only goal is to represent the patch they're on in a network
         set claiming claim
         set color white ;; Visualization of the process
         set size 1
@@ -220,8 +221,8 @@ to setup-least-cost-distances ;; Every community calculates the least-cost pathw
         create-links-with rangers-on neighbors [ ;; Every ranger links up with his neighbors
           set weight 0.5 * sum [walkingCost] of both-ends ;; The weight of every link is the average of the walking time cost of both ends
         ]
+       ]
       ]
-    ]
     let comX pxcor ;; Needed to indicate the ranger situated on the community patch
     let comY pycor ;; Needed to indicate the ranger situated on the community patch
     let home-ranger one-of rangers with [xcor = comX and ycor = comY] ;; Indicating the ranger on the community patch
@@ -233,18 +234,18 @@ to setup-least-cost-distances ;; Every community calculates the least-cost pathw
           set in-range-of sentence (in-range-of) claimed
           set claimed-cost sentence (claimed-cost) LCD
         ]
+       ]
       ]
-    ]
     ask rangers [die] ;; Rangers don't have any other function in the model, so they are removed
   ]
 end
 
-to setup-households ;; creates a total population through number defined by slider
+to setup-households       ;;;; incorporate in setup-communities?
   ask communities [
     let claim self
-    let claimed-patches patches with [member? claim in-range-of and any? communities-here = false]
-    hatch-households population [
-      set members round random-normal household-size 0.5
+    let claimed-patches patches with [member? claim in-range-of and any? communities-here = false]         ;;;; DOES THIS BELONG HERE?
+    hatch-households number-households [  ;; creates a total population through number defined by slider
+      set members round random-normal household-size 0.5       ;;; DO WE NEED THIS?
       set shape "person"
       set size 5
       set food-carry 0
@@ -409,21 +410,6 @@ to wood-updateStandingStock
     set wood-standingStock wood-standingStock + wood-growth
   ]
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 201
@@ -525,7 +511,7 @@ number-households
 number-households
 0
 500
-25.0
+100.0
 1
 1
 NIL
