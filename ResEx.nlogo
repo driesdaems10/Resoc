@@ -22,9 +22,9 @@ globals [
   year                       ; STILL NECESSARY?? Used nowhere else in model
   elevation-raster           ; elevation raster dataset
   fertility-raster           ; fertility raster dataset
-  maxStandingStock-raster
-  resA-raster
-  resB-raster
+  maxStandingStock-raster    ; maximum forest standing stock dataset
+  rico-raster                ; dataset for calibrating forest growth function
+  power-raster               ; dataset for calibrating forest growth function
   IA-sites                   ; dataset with Iron Age site from area of Sagalassos
   site-locations             ; STILL NECESSARY?? Used nowhere else in model
   walkingTime-raster
@@ -37,13 +37,13 @@ breed [households household]
 breed [rangers ranger]
 
 patches-own [
-  elevation   ;; elevation value
-  ;wood-age ;; all patches are forest initially and are therefore given an age corresponding to a more or less mature forest. When cut, forest age is reset to zero.
-  wood-maxStandingStock ;; upper limit to usable wood contained within a forested patch (m³/ha). Calculated from GREFOS model runs, input via map.
-  wood-standingStock ;; actual standing stock on a patch at a given time (m³/ha). Calculated from forest growth function.
-  wood-resA ;; upper limit to forest growth (m³/ha*year). Calculated from GREFOS model runs, input via map.
-  wood-resB ;; growth rate of forest stock (m³/m³*ha*year). Calculated from GREFOS model runs, input via map.
+  elevation   ;; elevation value, input via map.
+  wood-age ;; all patches are forest initially and are therefore given an age corresponding to a more or less mature forest. When cut, forest age is reset to zero.
+  wood-maxStandingStock ;; upper limit to grown wood contained within a forested patch (m³/ha). Calculated from GREFOS model runs, input via map.
+  wood-rico ;; Initial wood growth rate (m³/ha*year). Calculated from GREFOS model runs, input via map.
+  wood-power ;;  Wood growth rate (1/year). Calculated from GREFOS model runs, input via map.
   wood? ;; variable to allow for wood regeneration
+  wood-standingStock ;; actual standing stock on a patch at a given time (m³/ha). Calculated from forest growth function: standingStock = rico * exp(age * power) (until standingStock = maxStandingStock)
   food-fertility ;; crop yield on a cultivated patch (tons/(year*ha))
   original-food-value ;; variable to allow food to be regenerated to the original value
   food? ;; variable to allow for food regeneration
@@ -124,8 +124,8 @@ to import-map
   set elevation-raster gis:load-dataset "/data/Altitude_EPSG32636_Clipped_Resampled2.asc"
   set fertility-raster gis:load-dataset "/data/fertilityFromRegressionWaterwaysExcluded_EPSG32636_Clipped_Resampled2.asc"
   set maxStandingStock-raster gis:load-dataset "/data/MaxStandingStock_GREFOS_EPSG32636_Clipped_Resampled2.asc"
-  set resA-raster gis:load-dataset "/data/resAMap_GREFOS_EPSG32636_Clipped_Resampled2.asc"
-  set resB-raster gis:load-dataset "/data/resBMap_GREFOS_EPSG32636_Clipped_Resampled2.asc"
+  set rico-raster gis:load-dataset "/data/ricoMap_GREFOS_EPSG32636_Clipped_Resampled2.asc"
+  set power-raster gis:load-dataset "/data/powerMap_GREFOS_EPSG32636_Clipped_Resampled2.asc"
   set walkingTime-raster gis:load-dataset "/data/Tobler_EPSG32636.asc"
   set waterBodies-raster gis:load-dataset "/data/lakesAndRiversRasterized_EPSG32636_Clipped.asc"
 
@@ -140,8 +140,8 @@ to setup-topo
   ask patches [set elevation gis:raster-value elevation-raster pxcor (max-pycor - pycor) ]
   ask patches [set wood-maxStandingStock gis:raster-value maxStandingStock-raster pxcor (max-pycor - pycor)]
   ask patches [set walkingTime gis:raster-value walkingTime-raster pxcor (max-pycor - pycor)]
-  ask patches [set wood-resA gis:raster-value resA-raster pxcor (max-pycor - pycor)]
-  ask patches [set wood-resB gis:raster-value resB-raster pxcor (max-pycor - pycor)]
+  ask patches [set wood-rico gis:raster-value rico-raster pxcor (max-pycor - pycor)]
+  ask patches [set wood-power gis:raster-value power-raster pxcor (max-pycor - pycor)]
   let e-min min [elevation] of patches
   let e-max max [elevation] of patches
   ask patches
@@ -174,7 +174,7 @@ to setup-communities
     set size sqrt (population / 5)
   ]
    ]
-  [                   ;; depending on input from switch on interface. If true: import Iran Age site dataset
+  [                   ;; depending on input from switch on interface. If true: import Iron Age site dataset
     set IA-sites gis:load-dataset "/data/Iron Age sites.shp"
     let valid false
     foreach gis:property-names IA-sites [
@@ -242,7 +242,7 @@ end
 to setup-households       ;;;; incorporate in setup-communities?
   ask communities [
     let claim self
-    let claimed-patches patches with [member? claim in-range-of and any? communities-here = false]
+    let claimed-patches patches with [member? claim in-range-of and any? communities-here = false] ;; used further on to create a "candidate-patches" patchset per household, which are all patches in range of that household.
     hatch-households number-households [  ;; creates a total population through number defined by slider
       set members round random-normal household-size 0.5       ;;; DO WE NEED THIS?
       set shape "person"
@@ -261,7 +261,7 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
     ifelse not any? communities-here [    ;; settled patches are not forested and not suited for agriculture
       set wood? true
       set food? true
-      set wood-standingStock 0.5 * wood-maxStandingStock + random-float 0.5 * wood-maxStandingStock;; all non-settled patches are more or less mature forest at the start
+      set wood-age 200 + random 200 ;; all non-settled patches are more or less mature forest at the start
       set food-fertility gis:raster-value fertility-raster pxcor (max-pycor - pycor)
     ]
     [
@@ -270,6 +270,8 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
 
     ]
   wood-updateStandingStock
+  set wood-standingStock min (list wood-standingStock wood-maxStandingStock)
+
   set original-food-value food-fertility
   ]
 
@@ -281,7 +283,7 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
   ]
 end
 
-to setup-regeneration
+to setup-regeneration ;; Procedure required to properly initialize fertility decline and restoration.
   set regeneration-reserve 0.1 ;; required non-zero initialisation for Verhulst growth
   ask patches with [original-food-value > 0] [
     ifelse original-food-value > regeneration-reserve [
@@ -308,14 +310,21 @@ to exploit-resources
       pen-down
       move-to max-one-of candidate-patches [food-fertility / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best food / walking cost ratio
       let food-exploited 0
+      let wood-from-the-field 0
       ask patch-here [
         set food-exploited food-fertility
         set food-fertility 0    ;; basic assumption of exploiting all available food
+        set wood-from-the-field wood-standingStock
+        set wood-standingStock 0
+        set wood-age 0
+        set wood? false ;, assumption that when exploited for food, fields don't regenerate wood.
       ]
       set food-carry food-exploited
+      set wood-carry wood-from-the-field
       move-to parent
       ask communities-here [
         set energy-stock energy-stock + [food-carry] of myself
+        set wood-stock wood-stock + [wood-carry] of myself
       ]
       pen-up
     ]
@@ -352,7 +361,8 @@ to exploit-resources
         let wood-exploited 0
         ask patch-here [
           set wood-exploited wood-standingStock
-          set wood-standingStock 0  ;; all wood from exploited patch is collected
+          set wood-standingStock 0  ;; all wood from exploited patch is collected.
+          set wood-age 0 ;; resetting to zero for use in the growth function.
         ]
         set wood-carry wood-exploited
         move-to parent
@@ -403,16 +413,10 @@ end
 
 to wood-updateStandingStock
   if wood? = true [  ;; only patches that can still grow wood (e.g. not clay quarries) can regrow food
-    let wood-growth 0
     if wood-standingStock < wood-maxStandingStock [
-      ifelse wood-standingStock = 0 [
-        set wood-growth 0.3835 ;; mean starting growth value from GREFOS. Required because formula causes growth to stay zero when zero standing stock
-      ]
-      [
-        set wood-growth wood-resA * (1 - exp (- wood-standingStock * wood-resB))
-      ]
+     set wood-standingStock wood-rico * exp(wood-power * wood-age)
     ]
-    set wood-standingStock wood-standingStock + wood-growth
+    set wood-age wood-age + 1
   ]
 end
 @#$#@#$#@
