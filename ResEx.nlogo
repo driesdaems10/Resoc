@@ -1,5 +1,5 @@
 ;;;; Next steps to be implemented:
-;; clay & wood exploitation
+;; clay exploitation
 ;; site dynamics: periodic addition of new site + buffer catchment zone per site
 ;; implement site sizes according to archaeological survey data?
 
@@ -10,7 +10,6 @@
 
 ;; = regular comment
 ;; TBI = To Be Implemented
-;; TEST TEST GITHUB for DIGITAL ARCHAEOLOGY
 
 extensions [
   gis
@@ -243,7 +242,7 @@ end
 to setup-households       ;;;; incorporate in setup-communities?
   ask communities [
     let claim self
-    let claimed-patches patches with [member? claim in-range-of and any? communities-here = false]         ;;;; DOES THIS BELONG HERE?
+    let claimed-patches patches with [member? claim in-range-of and any? communities-here = false]
     hatch-households number-households [  ;; creates a total population through number defined by slider
       set members round random-normal household-size 0.5       ;;; DO WE NEED THIS?
       set shape "person"
@@ -258,6 +257,7 @@ end
 
 to setup-resources ;; already included in GIS step that wood or food cannot grow on water.
   ask patches [
+    set clay? false
     ifelse not any? communities-here [    ;; settled patches are not forested and not suited for agriculture
       set wood? true
       set food? true
@@ -267,13 +267,13 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
     [
       set wood-maxStandingStock 0 ;; TBI: if community ever dies, reset wood-maxStandingStock
       set food-fertility 0
-    ]
 
+    ]
   wood-updateStandingStock
   set original-food-value food-fertility
   ]
 
-  ask n-of 1000 patches with [land? = true] [    ;; number of clay sources hard-coded for now but can be made dependent on number of patches
+  ask n-of (count patches / 100) patches with [land? = true and not any? communities-here] [    ;; number of clay sources determined based on the total number of patches
     set clay? true
     set pcolor black
     set clay-quality random 100  ;; TBI: quality random for now but needs to be made dependent on altitude
@@ -305,7 +305,6 @@ to exploit-resources
   ifelse ticks mod 2 = 0 [        ;; alternate between food exploitation and clay/wood
   ;; every two ticks (i.e. once per year) households move to farms to exploit all available resources and move back to settlement
     ask households [
-    ;print "I am going to get food"
       pen-down
       move-to max-one-of candidate-patches [food-fertility / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best food / walking cost ratio
       let food-exploited 0
@@ -323,13 +322,18 @@ to exploit-resources
   ]
   [
     ask households [
-   ;   print "I want WOOOOODDD OR CLAAAAYYYY"
       ifelse random 2 > 0 [
-         move-to one-of patches in-radius territory with [clay? = true]  ;; TBI: search for highest quality clays in function of distance from site
+      ;   let best-clay patches in-radius territory with-max [clay-quality]    ;; find best clay source in nearby patches
+      ;   move-to one-of best-clay                                             ;; TBI: search for highest quality clays in function of distance from site
+         move-to max-one-of candidate-patches [clay-quality / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best clay / walking cost ratio
          let clay-exploited 0
          ask patch-here [
-           set clay-exploited (clay-quantity * clay-exploitation-rate)  ;; TBI: for now random 10% of source exploited, what would be realistic?
-           set clay-quantity clay-quantity - (clay-quantity * clay-exploitation-rate)
+           set clay-exploited (clay-quantity * (clay-exploitation-rate / 100))  ;; TBI: for now random 10% of source exploited, what would be realistic?
+           set clay-quantity (clay-quantity - clay-exploited)
+           if clay-quantity < 1 [    ;; when a patch is (almost) fully exploited it is no longer a clay source and its quality is set to 0 in order not to interfere with further source selection
+            set clay? false
+            set clay-quality 0
+           ]
            set food-fertility 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
            set wood-standingStock 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
            set wood? false
@@ -338,8 +342,9 @@ to exploit-resources
          set clay-carry clay-exploited
          move-to parent
          ask communities-here [
-          set clay-stock clay-stock + [clay-carry] of myself
+          set clay-stock clay-stock + [clay-carry] of myself   ;; exploited clay is added to community stock
           ]
+         set clay-carry 0
         ]
         [
         pen-down
@@ -560,17 +565,17 @@ HORIZONTAL
 
 SLIDER
 8
-323
+322
 180
-356
+355
 clay-exploitation-rate
 clay-exploitation-rate
 0
+100
+10.0
 1
-0.1
-0.01
 1
-NIL
+%
 HORIZONTAL
 
 SLIDER
@@ -599,7 +604,7 @@ NIL
 0.0
 10.0
 0.0
-10.0
+2.0
 true
 true
 "" ""
@@ -629,6 +634,24 @@ PENS
 "Valley, 1 other near" 1.0 0 -11221820 true "" "plot [wood-stock / (population * ticks / 2)] of community 2"
 "Mountain, 2 others near" 1.0 0 -10899396 true "" "plot [wood-stock / (population * ticks / 2)] of community 1"
 "Mountain, isolated" 1.0 0 -2674135 true "" "plot [wood-stock / (population * ticks / 2)] of community 8"
+
+PLOT
+204
+423
+404
+573
+Clay stock
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot [clay-stock] of community 0"
 
 @#$#@#$#@
 ## WHAT IS IT?
