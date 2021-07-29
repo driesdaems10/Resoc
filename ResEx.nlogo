@@ -98,12 +98,12 @@ to go
   add-sites
   energy-availability
   exploit-resources
+  viz-exploitation
   burn-resources
   regenerate
   tick
 
   if ticks = time-limit [
-    viz-exploitation
     stop
   ]
 end
@@ -393,6 +393,7 @@ to regenerate
         set food-fertility regeneration-reserve + (regeneration-reserve * growth-rate * (1 - regeneration-reserve / original-food-value))
         ]
       ]
+        set food-fertility min list food-fertility original-food-value ; Correct overshoot introduced by procedure: will be changed in the future.
       ]
     ]
   ]
@@ -402,9 +403,38 @@ to regenerate
 end
 
 to viz-exploitation
-  ;; wood
-  ;; food
-  ;; clay
+ifelse landuse-visualization [
+    let w-max max [wood-standingStock] of patches
+    let w-min min [wood-standingStock] of patches with [wood? = true]
+    let f-max max [food-fertility] of patches
+    let f-min min [food-fertility] of patches
+    let c-max max [clay-quantity] of patches
+    let c-min min [clay-quantity] of patches with [clay? = true]
+
+    ask patches with [land? = true and wood? = true] [ ; forested areas
+      set pcolor palette:scale-gradient [[0 109 44][186 228 179]] wood-standingStock w-max w-min
+    ]
+
+    ask patches with [land? = true and wood? = false and food? = true] [ ; agricultural areas
+      set pcolor palette:scale-gradient [[153 52 4][254 217 142]] food-fertility f-max f-min
+    ]
+
+    ask patches with [clay? = true] [
+      set pcolor palette:scale-gradient [[37 37 37][204 204 204]] clay-quantity c-max c-min
+    ]
+  ]
+  [
+    let e-max max [elevation] of patches
+    let e-min min [elevation] of patches
+    ask patches [
+      ifelse land? = true [
+        set pcolor palette:scale-gradient [[255 0 0][255 255 191][0 104 55]] elevation e-max e-min
+      ]
+      [
+        set pcolor blue
+      ]
+    ]
+  ]
 end
 
 to wood-updateStandingStock
@@ -656,6 +686,17 @@ PENS
 "Community 12" 1.0 0 -8630108 true "" "plot [wood-stock / (population * ticks / 2)] of community 12"
 "Community 13" 1.0 0 -5825686 true "" "plot [wood-stock / (population * ticks / 2)] of community 13"
 "Community 14" 1.0 0 -2064490 true "" "plot [wood-stock / (population * ticks / 2)] of community 14"
+
+SWITCH
+2
+319
+172
+352
+landuse-visualization
+landuse-visualization
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
