@@ -17,14 +17,12 @@ extensions [
 
 globals [
   coordsys? ; boolean variable for checking if default coordinate system (WGS84) for all spatial data is set
-  year                       ; STILL NECESSARY?? Used nowhere else in model
   elevation-raster           ; elevation raster dataset
   fertility-raster           ; fertility raster dataset
   maxStandingStock-raster    ; maximum forest standing stock dataset
   rico-raster                ; dataset for calibrating forest growth function
   power-raster               ; dataset for calibrating forest growth function
   IA-sites                   ; dataset with Iron Age sites from area of Sagalassos
-  site-locations             ; STILL NECESSARY?? Used nowhere else in model
   walkingTime-raster
   waterBodies-raster
   regeneration-reserve
@@ -242,7 +240,7 @@ to setup-households       ;;;; incorporate in setup-communities?
     let claim self
     let claimed-patches patches with [member? claim in-range-of and any? communities-here = false] ;; used further on to create a "candidate-patches" patchset per household, which are all patches in range of that household.
     hatch-households number-households [  ;; creates a total population through number defined by slider
-      set members round random-normal household-size 0.5       ;;; DO WE NEED THIS?
+      set members round random-normal household-size 0.5
       set shape "person"
       set size 5
       set food-carry 0
@@ -298,7 +296,7 @@ end
 
 
 to energy-availability  ;; every community checks energy availability to determine next strategy
-  ask communities []
+ ; ask communities []
 end
 
 to exploit-resources
@@ -330,8 +328,6 @@ to exploit-resources
   [
     ask households [
       ifelse random 2 > 0 [
-      ;   let best-clay patches in-radius territory with-max [clay-quality]    ;; find best clay source in nearby patches
-      ;   move-to one-of best-clay                                             ;; TBI: search for highest quality clays in function of distance from site
          ; pen-down
          move-to max-one-of candidate-patches [clay-quality / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best clay / walking cost ratio
          let clay-exploited 0
@@ -378,7 +374,6 @@ to exploit-resources
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
   ;; TBI: if wood --> food and clay become possible after wood has been depleted or regrowth
   ;; TBI: if food --> tends to stay food? assume stability in agricultural plots?
-  ;; TBI: for example, initial wood may be removed during agricultural tick, then flag patch as agricultural for a number of ticks.
   ;; TBI: predator-prey dynamics agriculture?: don't reset fertility to zero when harvested, but gradually decline it and allow to regain itself if left alone.
 
 end
@@ -422,10 +417,10 @@ to wood-updateStandingStock
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-201
-11
-1008
-416
+173
+10
+980
+415
 -1
 -1
 1.0
@@ -449,10 +444,10 @@ ticks
 30.0
 
 BUTTON
+0
 10
-47
-88
-80
+83
+43
 NIL
 setup
 NIL
@@ -466,10 +461,10 @@ NIL
 1
 
 BUTTON
-88
-47
-151
-80
+82
+10
+172
+43
 NIL
 go
 T
@@ -483,10 +478,10 @@ NIL
 1
 
 SLIDER
-10
-145
-182
-178
+0
+108
+172
+141
 communities-number
 communities-number
 0
@@ -498,10 +493,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-10
-178
-182
-211
+0
+141
+172
+174
 territory
 territory
 0
@@ -513,10 +508,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-10
-213
-182
-246
+0
+175
+172
+208
 number-households
 number-households
 0
@@ -528,10 +523,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-10
-114
-182
-147
+0
+77
+172
+110
 time-limit
 time-limit
 0
@@ -543,10 +538,10 @@ NIL
 HORIZONTAL
 
 SWITCH
-10
-81
-182
-114
+0
+44
+172
+77
 real-communities
 real-communities
 0
@@ -554,14 +549,14 @@ real-communities
 -1000
 
 SLIDER
-10
-246
-182
-279
+0
+208
+172
+241
 regeneration-time
 regeneration-time
 1
-5
+3
 2.0
 1
 1
@@ -569,10 +564,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-10
-277
-182
-310
+0
+239
+172
+272
 clay-exploitation-rate
 clay-exploitation-rate
 0
@@ -584,10 +579,10 @@ clay-exploitation-rate
 HORIZONTAL
 
 SLIDER
-10
-309
-182
-342
+0
+271
+172
+304
 household-size
 household-size
 1
@@ -599,10 +594,10 @@ NIL
 HORIZONTAL
 
 PLOT
-1008
+979
 10
-1475
-204
+1454
+290
 Crops harvested [tons per year and household]
 Time
 NIL
@@ -614,16 +609,27 @@ true
 true
 "" ""
 PENS
-"Valley, isolated" 1.0 0 -16777216 true "" "plot [energy-stock / (population * ticks / 2)] of community 7"
-"Valley, 1 other near" 1.0 0 -11221820 true "" "plot [energy-stock / (population * ticks / 2)] of community 2"
-"Mountain, 2 others near" 1.0 0 -10899396 true "" "plot [energy-stock / (population * ticks / 2)] of community 1"
-"Mountain, isolated" 1.0 0 -2674135 true "" "plot [energy-stock / (population * ticks / 2)] of community 8"
+"Community 0" 1.0 0 -16777216 true "" "plot [energy-stock / (population * ticks / 2)] of community 0"
+"Community 1" 1.0 0 -11221820 true "" "plot [energy-stock / (population * ticks / 2)] of community 1"
+"Community 2" 1.0 0 -10899396 true "" "plot [energy-stock / (population * ticks / 2)] of community 2"
+"Community 3" 1.0 0 -2674135 true "" "plot [energy-stock / (population * ticks / 2)] of community 3"
+"Community 4" 1.0 0 -7500403 true "" "plot [energy-stock / (population * ticks / 2)] of community 4"
+"Community 5" 1.0 0 -955883 true "" "plot [energy-stock / (population * ticks / 2)] of community 5"
+"Community 6" 1.0 0 -6459832 true "" "plot [energy-stock / (population * ticks / 2)] of community 6"
+"Community 7" 1.0 0 -1184463 true "" "plot [energy-stock / (population * ticks / 2)] of community 7"
+"Community 8" 1.0 0 -13840069 true "" "plot [energy-stock / (population * ticks / 2)] of community 8"
+"Community 9" 1.0 0 -14835848 true "" "plot [energy-stock / (population * ticks / 2)] of community 9"
+"Community 10" 1.0 0 -13791810 true "" "plot [energy-stock / (population * ticks / 2)] of community 10"
+"Community 11" 1.0 0 -13345367 true "" "plot [energy-stock / (population * ticks / 2)] of community 11"
+"Community 12" 1.0 0 -8630108 true "" "plot [energy-stock / (population * ticks / 2)] of community 12"
+"Community 13" 1.0 0 -5825686 true "" "plot [energy-stock / (population * ticks / 2)] of community 13"
+"Community 14" 1.0 0 -2064490 true "" "plot [energy-stock / (population * ticks / 2)] of community 14"
 
 PLOT
-1008
-206
-1475
-415
+980
+291
+1454
+566
 Wood harvested [m³ per year and household]
 Time
 NIL
@@ -635,28 +641,21 @@ true
 true
 "" ""
 PENS
-"Valley, isolated" 1.0 0 -16777216 true "" "plot [wood-stock / (population * ticks / 2)] of community 7"
-"Valley, 1 other near" 1.0 0 -11221820 true "" "plot [wood-stock / (population * ticks / 2)] of community 2"
-"Mountain, 2 others near" 1.0 0 -10899396 true "" "plot [wood-stock / (population * ticks / 2)] of community 1"
-"Mountain, isolated" 1.0 0 -2674135 true "" "plot [wood-stock / (population * ticks / 2)] of community 8"
-
-PLOT
-201
-415
-401
-565
-Clay stock
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot [clay-stock] of community 0"
+"Community 0" 1.0 0 -16777216 true "" "plot [wood-stock / (population * ticks / 2)] of community 0"
+"Community 1" 1.0 0 -11221820 true "" "plot [wood-stock / (population * ticks / 2)] of community 1"
+"Community 2" 1.0 0 -10899396 true "" "plot [wood-stock / (population * ticks / 2)] of community 2"
+"Community 3" 1.0 0 -2674135 true "" "plot [wood-stock / (population * ticks / 2)] of community 3"
+"Community 4" 1.0 0 -7500403 true "" "plot [wood-stock / (population * ticks / 2)] of community 4"
+"Community 5" 1.0 0 -955883 true "" "plot [wood-stock / (population * ticks / 2)] of community 5"
+"Community 6" 1.0 0 -6459832 true "" "plot [wood-stock / (population * ticks / 2)] of community 6"
+"Community 7" 1.0 0 -1184463 true "" "plot [wood-stock / (population * ticks / 2)] of community 7"
+"Community 8" 1.0 0 -13840069 true "" "plot [wood-stock / (population * ticks / 2)] of community 8"
+"Community 9" 1.0 0 -14835848 true "" "plot [wood-stock / (population * ticks / 2)] of community 9"
+"Community 10" 1.0 0 -13791810 true "" "plot [wood-stock / (population * ticks / 2)] of community 10"
+"Community 11" 1.0 0 -13345367 true "" "plot [wood-stock / (population * ticks / 2)] of community 11"
+"Community 12" 1.0 0 -8630108 true "" "plot [wood-stock / (population * ticks / 2)] of community 12"
+"Community 13" 1.0 0 -5825686 true "" "plot [wood-stock / (population * ticks / 2)] of community 13"
+"Community 14" 1.0 0 -2064490 true "" "plot [wood-stock / (population * ticks / 2)] of community 14"
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1004,6 +1003,54 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="regeneration-time" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="2000"/>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 0</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 1</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 2</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 3</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 4</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 5</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 6</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 7</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 8</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 9</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 10</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 11</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 12</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 13</metric>
+    <metric>count [energy-stock / (population * ticks / 2)] of community 14</metric>
+    <enumeratedValueSet variable="real-communities">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="regeneration-time">
+      <value value="1"/>
+      <value value="2"/>
+      <value value="3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="communities-number">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="territory">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="household-size">
+      <value value="6"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="time-limit">
+      <value value="2000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-households">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="clay-exploitation-rate">
+      <value value="10"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
