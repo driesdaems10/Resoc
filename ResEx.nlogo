@@ -1,15 +1,13 @@
-;;;; Next steps to be implemented:
-;; clay exploitation
-;; site dynamics: periodic addition of new site + buffer catchment zone per site
-;; implement site sizes according to archaeological survey data?
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                   DEFINITIONS                  ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; = regular comment
 ;; TBI = To Be Implemented
+
+;; TBI: save initialization time by only loading GIS datasets once. (export-import world) Only subsequent steps are repeated at later Setup procedures.
+;; TBI: set walking cost of lakes to high number, so they become obstacles. Rivers would probably have been crossed readily.
+;; TBI: detailed settlement patterns with site sizes & periodization
 
 extensions [
   gis
@@ -25,7 +23,7 @@ globals [
   maxStandingStock-raster    ; maximum forest standing stock dataset
   rico-raster                ; dataset for calibrating forest growth function
   power-raster               ; dataset for calibrating forest growth function
-  IA-sites                   ; dataset with Iron Age site from area of Sagalassos
+  IA-sites                   ; dataset with Iron Age sites from area of Sagalassos
   site-locations             ; STILL NECESSARY?? Used nowhere else in model
   walkingTime-raster
   waterBodies-raster
@@ -149,7 +147,7 @@ to setup-topo
     let water gis:raster-sample waterBodies-raster self
     ifelse (water = 0); waterBodies raster is equal to zero when no water present.
     [ set pcolor palette:scale-gradient
-      [[252 141 89][255 255 191][0 104 55]] elevation e-min e-max
+      [[0 104 55][255 255 191][252 141 89]] elevation e-min e-max
       set land? true
     ]
     [ set pcolor blue
@@ -295,7 +293,7 @@ to setup-regeneration ;; Procedure required to properly initialize fertility dec
   ]
 end
 
-to add-sites ;; TBI: periodically adding sites ON lAND
+to add-sites ;; TBI: periodically adding sites (both from settlement data and random site distribution)
 end
 
 
@@ -307,7 +305,7 @@ to exploit-resources
   ifelse ticks mod 2 = 0 [        ;; alternate between food exploitation and clay/wood
   ;; every two ticks (i.e. once per year) households move to farms to exploit all available resources and move back to settlement
     ask households [
-      pen-down
+    ;  pen-down
       move-to max-one-of candidate-patches [food-fertility / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best food / walking cost ratio
       let food-exploited 0
       let wood-from-the-field 0
@@ -317,7 +315,7 @@ to exploit-resources
         set wood-from-the-field wood-standingStock
         set wood-standingStock 0
         set wood-age 0
-        set wood? false ;, assumption that when exploited for food, fields don't regenerate wood.
+        set wood? false ;; assumption that when exploited for food, fields don't regenerate wood.
       ]
       set food-carry food-exploited
       set wood-carry wood-from-the-field
@@ -326,7 +324,7 @@ to exploit-resources
         set energy-stock energy-stock + [food-carry] of myself
         set wood-stock wood-stock + [wood-carry] of myself
       ]
-      pen-up
+    ;  pen-up
     ]
   ]
   [
@@ -334,6 +332,7 @@ to exploit-resources
       ifelse random 2 > 0 [
       ;   let best-clay patches in-radius territory with-max [clay-quality]    ;; find best clay source in nearby patches
       ;   move-to one-of best-clay                                             ;; TBI: search for highest quality clays in function of distance from site
+         ; pen-down
          move-to max-one-of candidate-patches [clay-quality / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best clay / walking cost ratio
          let clay-exploited 0
          ask patch-here [
@@ -354,9 +353,10 @@ to exploit-resources
           set clay-stock clay-stock + [clay-carry] of myself   ;; exploited clay is added to community stock
           ]
          set clay-carry 0
+        ; pen-up
         ]
         [
-        pen-down
+      ;  pen-down
         move-to max-one-of candidate-patches [wood-standingStock / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best standing stock / walking cost ratio
         let wood-exploited 0
         ask patch-here [
@@ -369,20 +369,18 @@ to exploit-resources
         ask communities-here [
           set wood-stock wood-stock + [wood-carry] of myself
         ]
-        pen-up
+      ;  pen-up
       ]
     ]
   ]
 
   ;; TBI: opportunity costs! part of population exploits food, other part wood and clay
-
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
   ;; TBI: if wood --> food and clay become possible after wood has been depleted or regrowth
   ;; TBI: if food --> tends to stay food? assume stability in agricultural plots?
   ;; TBI: for example, initial wood may be removed during agricultural tick, then flag patch as agricultural for a number of ticks.
-  ;; TBI: predator-prey dynamics agriculture: don't reset fertility to zero when harvested, but gradually decline it and allow to regain itself if left alone.
-  ;; TBI: save initialization time by only loading GIS datasets once. (export-import world) Only subsequent steps are repeated at later Setup procedures.
-  ;; TBI: set walking cost of lakes to high number, so they become obstacles. Rivers would probably have been crossed readily.
+  ;; TBI: predator-prey dynamics agriculture?: don't reset fertility to zero when harvested, but gradually decline it and allow to regain itself if left alone.
+
 end
 
 to burn-resources   ;; every tick communities use (part of) available food, clay and wood to sustain themselves
@@ -409,6 +407,9 @@ to regenerate
 end
 
 to viz-exploitation
+  ;; wood
+  ;; food
+  ;; clay
 end
 
 to wood-updateStandingStock
@@ -465,9 +466,9 @@ NIL
 1
 
 BUTTON
-91
+88
 47
-154
+151
 80
 NIL
 go
@@ -482,10 +483,10 @@ NIL
 1
 
 SLIDER
-8
-158
-180
-191
+10
+145
+182
+178
 communities-number
 communities-number
 0
@@ -497,10 +498,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-8
-191
-180
-224
+10
+178
+182
+211
 territory
 territory
 0
@@ -512,10 +513,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-8
-226
-180
-259
+10
+213
+182
+246
 number-households
 number-households
 0
@@ -527,10 +528,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-8
-127
-180
-160
+10
+114
+182
+147
 time-limit
 time-limit
 0
@@ -542,10 +543,10 @@ NIL
 HORIZONTAL
 
 SWITCH
-8
-94
-180
-127
+10
+81
+182
+114
 real-communities
 real-communities
 0
@@ -553,10 +554,10 @@ real-communities
 -1000
 
 SLIDER
-8
-291
-180
-324
+10
+246
+182
+279
 regeneration-time
 regeneration-time
 1
@@ -568,10 +569,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-8
-322
-180
-355
+10
+277
+182
+310
 clay-exploitation-rate
 clay-exploitation-rate
 0
@@ -583,10 +584,10 @@ clay-exploitation-rate
 HORIZONTAL
 
 SLIDER
-8
-354
-180
-387
+10
+309
+182
+342
 household-size
 household-size
 1
@@ -598,10 +599,10 @@ NIL
 HORIZONTAL
 
 PLOT
-1014
-15
-1485
-217
+1008
+10
+1475
+204
 Crops harvested [tons per year and household]
 Time
 NIL
@@ -619,10 +620,10 @@ PENS
 "Mountain, isolated" 1.0 0 -2674135 true "" "plot [energy-stock / (population * ticks / 2)] of community 8"
 
 PLOT
-1014
-228
-1486
-439
+1008
+206
+1475
+415
 Wood harvested [m³ per year and household]
 Time
 NIL
@@ -640,10 +641,10 @@ PENS
 "Mountain, isolated" 1.0 0 -2674135 true "" "plot [wood-stock / (population * ticks / 2)] of community 8"
 
 PLOT
-204
-423
-404
-573
+201
+415
+401
+565
 Clay stock
 NIL
 NIL
