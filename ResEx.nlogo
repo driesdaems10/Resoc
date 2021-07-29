@@ -557,7 +557,7 @@ regeneration-time
 regeneration-time
 1
 3
-2.0
+3.0
 1
 1
 NIL
@@ -1008,46 +1008,25 @@ NetLogo 6.1.1
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="2000"/>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 0</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 1</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 2</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 3</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 4</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 5</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 6</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 7</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 8</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 9</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 10</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 11</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 12</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 13</metric>
-    <metric>count [energy-stock / (population * ticks / 2)] of community 14</metric>
-    <enumeratedValueSet variable="real-communities">
-      <value value="true"/>
-    </enumeratedValueSet>
+    <metric>[energy-stock / (population * ticks / 2)] of community 0</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 1</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 2</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 3</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 4</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 5</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 6</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 7</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 8</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 9</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 10</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 11</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 12</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 13</metric>
+    <metric>[energy-stock / (population * ticks / 2)] of community 14</metric>
     <enumeratedValueSet variable="regeneration-time">
       <value value="1"/>
       <value value="2"/>
       <value value="3"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="communities-number">
-      <value value="10"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="territory">
-      <value value="50"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="household-size">
-      <value value="6"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="time-limit">
-      <value value="2000"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="number-households">
-      <value value="100"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="clay-exploitation-rate">
-      <value value="10"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
