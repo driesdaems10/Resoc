@@ -336,7 +336,7 @@ to exploit-resources
          ask patch-here [
            set clay-exploited (clay-quantity * (clay-exploitation-rate / 100))  ;; TBI: for now random 10% of source exploited, what would be realistic?
            set clay-quantity (clay-quantity - clay-exploited)
-           if clay-quantity < 100 [    ;; when a patch is (almost) fully exploited it is no longer a clay source and its quality is set to 0 in order not to interfere with further source selection
+           if clay-quantity < 10 [    ;; when a patch is (almost) fully exploited it is no longer a clay source and its quality is set to 0 in order not to interfere with further source selection
             set clay? false
             ;set clay-quality 0
            ]
