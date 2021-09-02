@@ -594,7 +594,7 @@ regeneration-time
 regeneration-time
 1
 3
-2.0
+3.0
 1
 1
 NIL
