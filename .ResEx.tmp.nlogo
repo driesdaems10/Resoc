@@ -153,6 +153,8 @@ to setup-topo
     ]
     [ set pcolor blue
       set land? false
+      set wood? false
+      set food? false
       set wood-maxStandingStock 0
     ]
   ]
@@ -257,7 +259,7 @@ end
 
 to setup-resources ;; already included in GIS step that wood or food cannot grow on water.
   ask patches [
-    set clay? true
+    ifelse clay-quantity > clay-threshold * 10000 * 2 * 1000 [set clay? true][set clay? false] ; clay-threshold is expressed in tons per m³ of soil while clay-quantity is expressed in kgs per ha in the two uppermost m³ of soil.
     ifelse not any? communities-here [    ;; settled patches are not forested and not suited for agriculture
       set wood? true
       set food? true
@@ -331,30 +333,32 @@ to exploit-resources
     ask households [
       ifelse random 2 > 0 [
         if any? candidate-patches with [clay? = true] [
-         move-to max-one-of candidate-patches [clay-quantity / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best clay / walking cost ratio
-         let clay-exploited 0
-         ask patch-here [
-           set clay-exploited (clay-quantity * (clay-exploitation-rate / 100))  ;; TBI: for now random 10% of source exploited, what would be realistic?
-           set clay-quantity (clay-quantity - clay-exploited)
-           if clay-quantity < 10 [    ;; when a patch is (almost) fully exploited it is no longer a clay source and its quality is set to 0 in order not to interfere with further source selection
-            set clay? false
-            ;set clay-quality 0
-           ]
-           set food-fertility 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
-           set wood-standingStock 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
-           set wood? false
-           set food? false
-         ]
-         set clay-carry clay-exploited
-         move-to parent
-         ask communities-here [
-          set clay-stock clay-stock + [clay-carry] of myself   ;; exploited clay is added to community stock
+          move-to max-one-of candidate-patches with [clay? = true] [clay-quantity / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best clay / walking cost ratio
+          let clay-exploited 0
+          ask patch-here [
+            set clay-exploited (clay-quantity * (clay-exploitation-rate / 100))
+            set clay-exploited 1500 ;; a single household harvests about 1 m³ per year, which weighs approx. 1500 kgs
+
+            set clay-quantity (clay-quantity - clay-exploited)
+            if clay-quantity < clay-threshold * 10000 * 2 * 1000 [
+              set clay? false
+              ;set clay-quality 0
+            ]
+            set food-fertility 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
+            set wood-standingStock 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
+            set wood? false
+            set food? false
           ]
-         set clay-carry 0
+          set clay-carry clay-exploited
+          move-to parent
+          ask communities-here [
+            set clay-stock clay-stock + [clay-carry] of myself   ;; exploited clay is added to community stock
+          ]
+          set clay-carry 0
         ]
       ]
 
-        [
+      [
       ;  pen-down
         move-to max-one-of candidate-patches [wood-standingStock / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best standing stock / walking cost ratio
         let wood-exploited 0
@@ -422,8 +426,8 @@ ifelse landuse-visualization [
       set pcolor palette:scale-gradient [[153 52 4][254 217 142]] food-fertility f-max f-min
     ]
 
-    ask patches with [clay? = true and wood? = false and food? = false] [
-      set pcolor palette:scale-gradient [[37 37 37][204 204 204]] clay-quantity c-max c-min
+    ask patches with [clay? = true and wood? = false and food? = false] [ ; areas used for clay excavation
+      set pcolor palette:scale-gradient [[0 0 0][255 255 255]] clay-quantity c-max c-min
     ]
   ]
   [
@@ -691,15 +695,30 @@ PENS
 "Community 14" 1.0 0 -2064490 true "" "plot [wood-stock / (population * ticks / 2)] of community 14"
 
 SWITCH
-2
-319
-172
-352
+1
+365
+171
+398
 landuse-visualization
 landuse-visualization
 0
 1
 -1000
+
+SLIDER
+0
+303
+172
+336
+clay-threshold
+clay-threshold
+0.3
+0.5
+0.4
+0.05
+1
+tonnes per m³
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
