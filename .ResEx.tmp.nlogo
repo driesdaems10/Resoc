@@ -1,6 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                   DEFINITIONS                  ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; blablahaha
 
 ;; = regular comment
 ;; TBI = To Be Implemented
@@ -331,31 +332,33 @@ to exploit-resources
   ]
   [
     ask households [
-      ifelse random 2 > 0 [
-        if any? candidate-patches with [clay? = true] [
-          move-to max-one-of candidate-patches with [clay? = true] [clay-quantity / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best clay / walking cost ratio
-          let clay-exploited 0
-          ask patch-here [
-            set clay-exploited (clay-quantity * (clay-exploitation-rate / 100))
-            set clay-exploited 1500 ;; a single household harvests about 1 m³ per year, which weighs approx. 1500 kgs
-
-            set clay-quantity (clay-quantity - clay-exploited)
-            if clay-quantity < clay-threshold * 10000 * 2 * 1000 [
-              set clay? false
-              ;set clay-quality 0
-            ]
-            set food-fertility 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
-            set wood-standingStock 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
-            set wood? false
-            set food? false
+      ifelse random 2 > 0 and any? candidate-patches with [clay? = true] [ ; if no clay within reach, settlement focuses on wood
+        move-to max-one-of candidate-patches with [clay? = true] [clay-quantity / (item position [parent] of myself in-range-of claimed-cost)] ; Households strive for the best clay / walking cost ratio
+        let clay-exploited 0
+        let wood-from-the-field 0
+        ask patch-here [
+          set clay-exploited (clay-quantity * (clay-exploitation-rate / 100))
+          set clay-exploited 1500 ;; a single household harvests about 1 m³ per year, which weighs approx. 1500 kgs
+          set clay-quantity (clay-quantity - clay-exploited)
+          if clay-quantity < clay-threshold * 10000 * 2 * 1000 [
+            set clay? false
+            ;set clay-quality 0
           ]
-          set clay-carry clay-exploited
-          move-to parent
-          ask communities-here [
-            set clay-stock clay-stock + [clay-carry] of myself   ;; exploited clay is added to community stock
-          ]
-          set clay-carry 0
+          set wood-from-the-field wood-standingStock ; patch is cleared for clay exploitation: wood goes to community as well
+          set food-fertility 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
+          set wood-standingStock 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
+          set wood-age 0
+          set wood? false
+          set food? false
         ]
+        set clay-carry clay-exploited
+        set wood-carry wood-from-the-field
+        move-to parent
+        ask communities-here [
+          set clay-stock clay-stock + [clay-carry] of myself   ;; exploited clay is added to community stock
+          set wood-stock wood-stock + [wood-carry] of myself
+        ]
+        set clay-carry 0
       ]
 
       [
@@ -381,7 +384,6 @@ to exploit-resources
   ;; TBI: if patch is first exploited as clay --> no food/wood possible anymore? (for some time)
   ;; TBI: if wood --> food and clay become possible after wood has been depleted or regrowth
   ;; TBI: if food --> tends to stay food? assume stability in agricultural plots?
-  ;; TBI: predator-prey dynamics agriculture?: don't reset fertility to zero when harvested, but gradually decline it and allow to regain itself if left alone.
 
 end
 
