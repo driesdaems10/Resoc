@@ -717,7 +717,7 @@ SWITCH
 398
 landuse-visualization
 landuse-visualization
-1
+0
 1
 -1000
 
@@ -1201,6 +1201,109 @@ NetLogo 6.1.1
     <enumeratedValueSet variable="regeneration-time">
       <value value="1"/>
       <value value="2"/>
+      <value value="3"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="EAA" repetitions="10" sequentialRunOrder="false" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="2000"/>
+    <metric>[energy-stock] of community 0</metric>
+    <metric>[energy-stock] of community 1</metric>
+    <metric>[energy-stock] of community 2</metric>
+    <metric>[energy-stock] of community 3</metric>
+    <metric>[energy-stock] of community 4</metric>
+    <metric>[energy-stock] of community 5</metric>
+    <metric>[energy-stock] of community 6</metric>
+    <metric>[energy-stock] of community 7</metric>
+    <metric>[energy-stock] of community 8</metric>
+    <metric>[energy-stock] of community 9</metric>
+    <metric>[energy-stock] of community 10</metric>
+    <metric>[energy-stock] of community 11</metric>
+    <metric>[energy-stock] of community 12</metric>
+    <metric>[energy-stock] of community 13</metric>
+    <metric>[energy-stock] of community 14</metric>
+    <metric>[wood-stock] of community 0</metric>
+    <metric>[wood-stock] of community 1</metric>
+    <metric>[wood-stock] of community 2</metric>
+    <metric>[wood-stock] of community 3</metric>
+    <metric>[wood-stock] of community 4</metric>
+    <metric>[wood-stock] of community 5</metric>
+    <metric>[wood-stock] of community 6</metric>
+    <metric>[wood-stock] of community 7</metric>
+    <metric>[wood-stock] of community 8</metric>
+    <metric>[wood-stock] of community 9</metric>
+    <metric>[wood-stock] of community 10</metric>
+    <metric>[wood-stock] of community 11</metric>
+    <metric>[wood-stock] of community 12</metric>
+    <metric>[wood-stock] of community 13</metric>
+    <metric>[wood-stock] of community 14</metric>
+    <metric>[clay-stock] of community 0</metric>
+    <metric>[clay-stock] of community 1</metric>
+    <metric>[clay-stock] of community 2</metric>
+    <metric>[clay-stock] of community 3</metric>
+    <metric>[clay-stock] of community 4</metric>
+    <metric>[clay-stock] of community 5</metric>
+    <metric>[clay-stock] of community 6</metric>
+    <metric>[clay-stock] of community 7</metric>
+    <metric>[clay-stock] of community 8</metric>
+    <metric>[clay-stock] of community 9</metric>
+    <metric>[clay-stock] of community 10</metric>
+    <metric>[clay-stock] of community 11</metric>
+    <metric>[clay-stock] of community 12</metric>
+    <metric>[clay-stock] of community 13</metric>
+    <metric>[clay-stock] of community 14</metric>
+    <metric>[total-food-effort] of community 0</metric>
+    <metric>[total-food-effort] of community 1</metric>
+    <metric>[total-food-effort] of community 2</metric>
+    <metric>[total-food-effort] of community 3</metric>
+    <metric>[total-food-effort] of community 4</metric>
+    <metric>[total-food-effort] of community 5</metric>
+    <metric>[total-food-effort] of community 6</metric>
+    <metric>[total-food-effort] of community 7</metric>
+    <metric>[total-food-effort] of community 8</metric>
+    <metric>[total-food-effort] of community 9</metric>
+    <metric>[total-food-effort] of community 10</metric>
+    <metric>[total-food-effort] of community 11</metric>
+    <metric>[total-food-effort] of community 12</metric>
+    <metric>[total-food-effort] of community 13</metric>
+    <metric>[total-food-effort] of community 14</metric>
+    <metric>[total-wood-effort] of community 0</metric>
+    <metric>[total-wood-effort] of community 1</metric>
+    <metric>[total-wood-effort] of community 2</metric>
+    <metric>[total-wood-effort] of community 3</metric>
+    <metric>[total-wood-effort] of community 4</metric>
+    <metric>[total-wood-effort] of community 5</metric>
+    <metric>[total-wood-effort] of community 6</metric>
+    <metric>[total-wood-effort] of community 7</metric>
+    <metric>[total-wood-effort] of community 8</metric>
+    <metric>[total-wood-effort] of community 9</metric>
+    <metric>[total-wood-effort] of community 10</metric>
+    <metric>[total-wood-effort] of community 11</metric>
+    <metric>[total-wood-effort] of community 12</metric>
+    <metric>[total-wood-effort] of community 13</metric>
+    <metric>[total-wood-effort] of community 14</metric>
+    <metric>[total-clay-effort] of community 0</metric>
+    <metric>[total-clay-effort] of community 1</metric>
+    <metric>[total-clay-effort] of community 2</metric>
+    <metric>[total-clay-effort] of community 3</metric>
+    <metric>[total-clay-effort] of community 4</metric>
+    <metric>[total-clay-effort] of community 5</metric>
+    <metric>[total-clay-effort] of community 6</metric>
+    <metric>[total-clay-effort] of community 7</metric>
+    <metric>[total-clay-effort] of community 8</metric>
+    <metric>[total-clay-effort] of community 9</metric>
+    <metric>[total-clay-effort] of community 10</metric>
+    <metric>[total-clay-effort] of community 11</metric>
+    <metric>[total-clay-effort] of community 12</metric>
+    <metric>[total-clay-effort] of community 13</metric>
+    <metric>[total-clay-effort] of community 14</metric>
+    <enumeratedValueSet variable="clay-threshold">
+      <value value="0.3"/>
+      <value value="0.4"/>
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="regeneration-time">
       <value value="3"/>
     </enumeratedValueSet>
   </experiment>
