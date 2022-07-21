@@ -174,7 +174,7 @@ to setup-communities
     ]
     set shape "house"
     ;; set population size based on a random number drawn from a normal distribution determined by slider on interface
-    set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
+    set population round random-normal (number-households * household-size) (number-households / 2) ;; rounded number because random-normal produces a float
     ;; average population currently set at 500  with sd 250
     set size sqrt (population / 5)
   ]
