@@ -656,7 +656,7 @@ PLOT
 426
 470
 642
-Crops harvested [tons per year and household]
+Crops harvested [tons per year and per capita]
 Time
 NIL
 0.0

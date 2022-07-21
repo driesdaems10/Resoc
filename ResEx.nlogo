@@ -656,7 +656,7 @@ PLOT
 426
 470
 642
-Crops harvested [tons per year and household]
+Crops harvested [tons per year and per capita]
 Time
 NIL
 0.0
@@ -688,7 +688,7 @@ PLOT
 427
 981
 643
-Wood harvested [m³ per year and household]
+Wood harvested [m³ per year and per capita]
 Time
 NIL
 0.0
