@@ -46,8 +46,8 @@ patches-own [
   food? ;; variable to allow for food regeneration
   growth-rate ;; crop growth rate in Verhulst function. Determined on the base of the regeneration-time variable
   clay? ;; variable defining whether or not a patch can be a clay source
-  ;clay-quality  ;; quality of clay per source
-  clay-quantity ;; kgs of clay per patch up to a depth of 2 m. Calculated from ISRIC data, input via map.
+  clay-quality  ;; quality of clay per source. Currently a random number between 1-100
+  clay-quantity ;; quantity of clay per patch. Currently a random number between 1-100
   land? ;; variable defining whether or not the patch is on land
   walkingTime ;; amount of time required to cross a patch (from preprocessed raster)
   in-range-of ;; list of communities that could potentially make use of this patch for agriculture or forestry
@@ -129,7 +129,7 @@ to import-map
   set power-raster gis:load-dataset "/data/powerMap_GREFOS_EPSG32636_Clipped_Resampled2.asc"
   set walkingTime-raster gis:load-dataset "/data/Tobler_EPSG32636.asc"
   set waterBodies-raster gis:load-dataset "/data/lakesAndRiversRasterized_EPSG32636_Clipped.asc"
-  set clay-raster gis:load-dataset "/data/Clay content_kg_per_ha_Clipped_EPSG32636.asc"
+
 
   gis:set-world-envelope (gis:envelope-of elevation-raster)
 
@@ -144,7 +144,7 @@ to setup-topo
   ask patches [set walkingTime gis:raster-value walkingTime-raster pxcor (max-pycor - pycor)]
   ask patches [set wood-rico gis:raster-value rico-raster pxcor (max-pycor - pycor)]
   ask patches [set wood-power gis:raster-value power-raster pxcor (max-pycor - pycor)]
-  ask patches [set clay-quantity gis:raster-value clay-raster pxcor (max-pycor - pycor)]
+  ask patches [set clay? false]
   let e-min min [elevation] of patches
   let e-max max [elevation] of patches
   ask patches
@@ -162,6 +162,13 @@ to setup-topo
       set wood-maxStandingStock 0
     ]
   ]
+
+  let n 0.01 * count patches with [land? = true]
+  ask n-of n patches with [land? = true][
+    set clay? true
+    set clay-quantity 1 + random 100
+    set clay-quality 1 + random 100
+  ]
 end
 
 to setup-communities
@@ -174,7 +181,7 @@ to setup-communities
     ]
     set shape "house"
     ;; set population size based on a random number drawn from a normal distribution determined by slider on interface
-    set population round random-normal number-households (number-households / 2) ;; rounded number because random-normal produces a float
+    set population round random-normal (number-households * household-size) (number-households / 2) ;; rounded number because random-normal produces a float
     ;; average population currently set at 500  with sd 250
     set size sqrt (population / 5)
   ]
@@ -263,7 +270,6 @@ end
 
 to setup-resources ;; already included in GIS step that wood or food cannot grow on water.
   ask patches [
-    ifelse clay-quantity > clay-threshold * 10000 * 2 * 1000 [set clay? true][set clay? false] ; clay-threshold is expressed in tons per m³ of soil while clay-quantity is expressed in kgs per ha in the two uppermost m³ of soil.
     ifelse not any? communities-here [    ;; settled patches are not forested and not suited for agriculture
       set wood? true
       set food? true
@@ -281,8 +287,9 @@ to setup-resources ;; already included in GIS step that wood or food cannot grow
   set original-food-value food-fertility
   ]
 
-  ask patches with [any? communities-here or land? = false] [
-    set clay-quantity 0 ; patches located at a community or on water cannot be exploited for clay
+  ask patches with [any? communities-here] [
+    set clay-quantity 0 ; patches located at a community cannot be exploited for clay
+    set clay-quality 0
     set clay? false
   ]
 end
@@ -340,18 +347,16 @@ to exploit-resources
     ask households [
       ifelse random 2 > 0 and any? candidate-patches with [clay? = true] [ ; if no clay within reach, settlement focuses on wood
         let homebase parent
-        move-to max-one-of candidate-patches with [clay? = true] [clay-quantity / (item position homebase in-range-of claimed-cost)] ; Households strive for the best clay / walking cost ratio
+        move-to max-one-of candidate-patches with [clay? = true] [clay-quantity * clay-quality / (item position homebase in-range-of claimed-cost)] ; Households strive for the best clay / walking cost ratio
         let clay-exploited 0
         let wood-from-the-field 0
         let effort 0
         ask patch-here [
           set effort item position homebase in-range-of claimed-cost
           set clay-exploited (clay-quantity * (clay-exploitation-rate / 100))
-          set clay-exploited 1500 ;; a single household harvests about 1 m³ per year, which weighs approx. 1500 kgs
           set clay-quantity (clay-quantity - clay-exploited)
-          if clay-quantity < clay-threshold * 10000 * 2 * 1000 [
+          if clay-quantity <= 1 [
             set clay? false
-            ;set clay-quality 0
           ]
           set wood-from-the-field wood-standingStock ; patch is cleared for clay exploitation: wood goes to community as well
           set food-fertility 0  ;; once a patch is exploited for clay, it cannot provide food or wood anymore
@@ -651,7 +656,7 @@ PLOT
 426
 470
 642
-Crops harvested [tons per year and household]
+Crops harvested [tons per year and per capita]
 Time
 NIL
 0.0
@@ -662,28 +667,28 @@ true
 true
 "" ""
 PENS
-"Community 0" 1.0 0 -16777216 true "" "plot [energy-stock / (population * ticks / 2)] of community 0"
-"Community 1" 1.0 0 -11221820 true "" "plot [energy-stock / (population * ticks / 2)] of community 1"
-"Community 2" 1.0 0 -10899396 true "" "plot [energy-stock / (population * ticks / 2)] of community 2"
-"Community 3" 1.0 0 -2674135 true "" "plot [energy-stock / (population * ticks / 2)] of community 3"
-"Community 4" 1.0 0 -7500403 true "" "plot [energy-stock / (population * ticks / 2)] of community 4"
-"Community 5" 1.0 0 -955883 true "" "plot [energy-stock / (population * ticks / 2)] of community 5"
-"Community 6" 1.0 0 -6459832 true "" "plot [energy-stock / (population * ticks / 2)] of community 6"
-"Community 7" 1.0 0 -1184463 true "" "plot [energy-stock / (population * ticks / 2)] of community 7"
-"Community 8" 1.0 0 -13840069 true "" "plot [energy-stock / (population * ticks / 2)] of community 8"
-"Community 9" 1.0 0 -14835848 true "" "plot [energy-stock / (population * ticks / 2)] of community 9"
-"Community 10" 1.0 0 -13791810 true "" "plot [energy-stock / (population * ticks / 2)] of community 10"
-"Community 11" 1.0 0 -13345367 true "" "plot [energy-stock / (population * ticks / 2)] of community 11"
-"Community 12" 1.0 0 -8630108 true "" "plot [energy-stock / (population * ticks / 2)] of community 12"
-"Community 13" 1.0 0 -5825686 true "" "plot [energy-stock / (population * ticks / 2)] of community 13"
-"Community 14" 1.0 0 -2064490 true "" "plot [energy-stock / (population * ticks / 2)] of community 14"
+"Community 0" 1.0 0 -16777216 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 0][plot 0]"
+"Community 1" 1.0 0 -11221820 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 1][plot 0]"
+"Community 2" 1.0 0 -10899396 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 2][plot 0]"
+"Community 3" 1.0 0 -2674135 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 3][plot 0]"
+"Community 4" 1.0 0 -7500403 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 4][plot 0]"
+"Community 5" 1.0 0 -955883 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 5][plot 0]"
+"Community 6" 1.0 0 -6459832 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 6][plot 0]"
+"Community 7" 1.0 0 -1184463 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 7][plot 0]"
+"Community 8" 1.0 0 -13840069 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 8][plot 0]"
+"Community 9" 1.0 0 -14835848 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 9][plot 0]"
+"Community 10" 1.0 0 -13791810 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 10][plot 0]"
+"Community 11" 1.0 0 -13345367 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 11][plot 0]"
+"Community 12" 1.0 0 -8630108 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 12][plot 0]"
+"Community 13" 1.0 0 -5825686 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 13][plot 0]"
+"Community 14" 1.0 0 -2064490 true "" "carefully[plot [energy-stock / (population * ticks / 2)] of community 14][plot 0]"
 
 PLOT
 507
 427
 981
 643
-Wood harvested [m³ per year and household]
+Wood harvested [m³ per year and per capita]
 Time
 NIL
 0.0
@@ -694,21 +699,21 @@ true
 true
 "" ""
 PENS
-"Community 0" 1.0 0 -16777216 true "" "plot [wood-stock / (population * ticks / 2)] of community 0"
-"Community 1" 1.0 0 -11221820 true "" "plot [wood-stock / (population * ticks / 2)] of community 1"
-"Community 2" 1.0 0 -10899396 true "" "plot [wood-stock / (population * ticks / 2)] of community 2"
-"Community 3" 1.0 0 -2674135 true "" "plot [wood-stock / (population * ticks / 2)] of community 3"
-"Community 4" 1.0 0 -7500403 true "" "plot [wood-stock / (population * ticks / 2)] of community 4"
-"Community 5" 1.0 0 -955883 true "" "plot [wood-stock / (population * ticks / 2)] of community 5"
-"Community 6" 1.0 0 -6459832 true "" "plot [wood-stock / (population * ticks / 2)] of community 6"
-"Community 7" 1.0 0 -1184463 true "" "plot [wood-stock / (population * ticks / 2)] of community 7"
-"Community 8" 1.0 0 -13840069 true "" "plot [wood-stock / (population * ticks / 2)] of community 8"
-"Community 9" 1.0 0 -14835848 true "" "plot [wood-stock / (population * ticks / 2)] of community 9"
-"Community 10" 1.0 0 -13791810 true "" "plot [wood-stock / (population * ticks / 2)] of community 10"
-"Community 11" 1.0 0 -13345367 true "" "plot [wood-stock / (population * ticks / 2)] of community 11"
-"Community 12" 1.0 0 -8630108 true "" "plot [wood-stock / (population * ticks / 2)] of community 12"
-"Community 13" 1.0 0 -5825686 true "" "plot [wood-stock / (population * ticks / 2)] of community 13"
-"Community 14" 1.0 0 -2064490 true "" "plot [wood-stock / (population * ticks / 2)] of community 14"
+"Community 0" 1.0 0 -16777216 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 0][plot 0]"
+"Community 1" 1.0 0 -11221820 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 1][plot 0]"
+"Community 2" 1.0 0 -10899396 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 2][plot 0]"
+"Community 3" 1.0 0 -2674135 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 3][plot 0]"
+"Community 4" 1.0 0 -7500403 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 4][plot 0]"
+"Community 5" 1.0 0 -955883 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 5][plot 0]"
+"Community 6" 1.0 0 -6459832 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 6][plot 0]"
+"Community 7" 1.0 0 -1184463 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 7][plot 0]"
+"Community 8" 1.0 0 -13840069 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 8][plot 0]"
+"Community 9" 1.0 0 -14835848 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 9][plot 0]"
+"Community 10" 1.0 0 -13791810 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 10][plot 0]"
+"Community 11" 1.0 0 -13345367 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 11][plot 0]"
+"Community 12" 1.0 0 -8630108 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 12][plot 0]"
+"Community 13" 1.0 0 -5825686 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 13][plot 0]"
+"Community 14" 1.0 0 -2064490 true "" "carefully[plot [wood-stock / (population * ticks / 2)] of community 14][plot 0]"
 
 SWITCH
 1
@@ -720,21 +725,6 @@ landuse-visualization
 0
 1
 -1000
-
-SLIDER
-0
-303
-172
-336
-clay-threshold
-clay-threshold
-0.3
-0.5
-0.3
-0.05
-1
-tonnes per m³
-HORIZONTAL
 
 PLOT
 996
@@ -752,21 +742,21 @@ true
 true
 "" ""
 PENS
-"Community 0" 1.0 0 -16777216 true "" "plot [energy-stock / (total-food-effort)] of community 0"
-"Community 1" 1.0 0 -7500403 true "" "plot [energy-stock / (total-food-effort)] of community 1"
-"Community 2" 1.0 0 -2674135 true "" "plot [energy-stock / (total-food-effort)] of community 2"
-"Community 3" 1.0 0 -955883 true "" "plot [energy-stock / (total-food-effort)] of community 3"
-"Community 4" 1.0 0 -6459832 true "" "plot [energy-stock / (total-food-effort)] of community 4"
-"Community 5" 1.0 0 -1184463 true "" "plot [energy-stock / (total-food-effort)] of community 5"
-"Community 6" 1.0 0 -10899396 true "" "plot [energy-stock / (total-food-effort)] of community 6"
-"Community 7" 1.0 0 -13840069 true "" "plot [energy-stock / (total-food-effort)] of community 7"
-"Community 8" 1.0 0 -14835848 true "" "plot [energy-stock / (total-food-effort)] of community 8"
-"Community 9" 1.0 0 -11221820 true "" "plot [energy-stock / (total-food-effort)] of community 9"
-"Community 10" 1.0 0 -13791810 true "" "plot [energy-stock / (total-food-effort)] of community 10"
-"Community 11" 1.0 0 -13345367 true "" "plot [energy-stock / (total-food-effort)] of community 11"
-"Community 12" 1.0 0 -8630108 true "" "plot [energy-stock / (total-food-effort)] of community 12"
-"Community 13" 1.0 0 -5825686 true "" "plot [energy-stock / (total-food-effort)] of community 13"
-"Community 14" 1.0 0 -2064490 true "" "plot [energy-stock / (total-food-effort)] of community 14"
+"Community 0" 1.0 0 -16777216 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 0][plot 0]"
+"Community 1" 1.0 0 -7500403 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 1][plot 0]"
+"Community 2" 1.0 0 -2674135 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 2][plot 0]"
+"Community 3" 1.0 0 -955883 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 3][plot 0]"
+"Community 4" 1.0 0 -6459832 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 4][plot 0]"
+"Community 5" 1.0 0 -1184463 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 5][plot 0]"
+"Community 6" 1.0 0 -10899396 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 6][plot 0]"
+"Community 7" 1.0 0 -13840069 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 7][plot 0]"
+"Community 8" 1.0 0 -14835848 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 8][plot 0]"
+"Community 9" 1.0 0 -11221820 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 9][plot 0]"
+"Community 10" 1.0 0 -13791810 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 10][plot 0]"
+"Community 11" 1.0 0 -13345367 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 11][plot 0]"
+"Community 12" 1.0 0 -8630108 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 12][plot 0]"
+"Community 13" 1.0 0 -5825686 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 13][plot 0]"
+"Community 14" 1.0 0 -2064490 true "" "carefully[plot [energy-stock / (total-food-effort)] of community 14][plot 0]"
 
 PLOT
 995
@@ -784,21 +774,21 @@ true
 true
 "" ""
 PENS
-"Community 0" 1.0 0 -16777216 true "" "plot [wood-stock / (total-wood-effort)] of community 0"
-"Community 1" 1.0 0 -7500403 true "" "plot [wood-stock / (total-wood-effort)] of community 1"
-"Community 2" 1.0 0 -2674135 true "" "plot [wood-stock / (total-wood-effort)] of community 2"
-"Community 3" 1.0 0 -955883 true "" "plot [wood-stock / (total-wood-effort)] of community 3"
-"Community 4" 1.0 0 -6459832 true "" "plot [wood-stock / (total-wood-effort)] of community 4"
-"Community 5" 1.0 0 -1184463 true "" "plot [wood-stock / (total-wood-effort)] of community 5"
-"Community 6" 1.0 0 -10899396 true "" "plot [wood-stock / (total-wood-effort)] of community 6"
-"Community 7" 1.0 0 -13840069 true "" "plot [wood-stock / (total-wood-effort)] of community 7"
-"Community 8" 1.0 0 -14835848 true "" "plot [wood-stock / (total-wood-effort)] of community 8"
-"Community 9" 1.0 0 -11221820 true "" "plot [wood-stock / (total-wood-effort)] of community 9"
-"Community 10" 1.0 0 -13791810 true "" "plot [wood-stock / (total-wood-effort)] of community 10"
-"Community 11" 1.0 0 -13345367 true "" "plot [wood-stock / (total-wood-effort)] of community 11"
-"Community 12" 1.0 0 -8630108 true "" "plot [wood-stock / (total-wood-effort)] of community 12"
-"Community 13" 1.0 0 -5825686 true "" "plot [wood-stock / (total-wood-effort)] of community 13"
-"Community 14" 1.0 0 -2064490 true "" "plot [wood-stock / (total-wood-effort)] of community 14"
+"Community 0" 1.0 0 -16777216 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 0][plot 0]"
+"Community 1" 1.0 0 -7500403 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 1][plot 0]"
+"Community 2" 1.0 0 -2674135 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 2][plot 0]"
+"Community 3" 1.0 0 -955883 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 3][plot 0]"
+"Community 4" 1.0 0 -6459832 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 4][plot 0]"
+"Community 5" 1.0 0 -1184463 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 5][plot 0]"
+"Community 6" 1.0 0 -10899396 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 6][plot 0]"
+"Community 7" 1.0 0 -13840069 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 7][plot 0]"
+"Community 8" 1.0 0 -14835848 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 8][plot 0]"
+"Community 9" 1.0 0 -11221820 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 9][plot 0]"
+"Community 10" 1.0 0 -13791810 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 10][plot 0]"
+"Community 11" 1.0 0 -13345367 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 11][plot 0]"
+"Community 12" 1.0 0 -8630108 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 12][plot 0]"
+"Community 13" 1.0 0 -5825686 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 13][plot 0]"
+"Community 14" 1.0 0 -2064490 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 14][plot 0]"
 
 PLOT
 996
@@ -816,21 +806,21 @@ true
 true
 "" ""
 PENS
-"Community 0" 1.0 0 -16777216 true "" "plot [clay-stock / (total-clay-effort)] of community 0"
-"Community 1" 1.0 0 -7500403 true "" "plot [wood-stock / (total-wood-effort)] of community 1"
-"Community 2" 1.0 0 -2674135 true "" "plot [wood-stock / (total-wood-effort)] of community 2"
-"Community 3" 1.0 0 -955883 true "" "plot [wood-stock / (total-wood-effort)] of community 3"
-"Community 4" 1.0 0 -6459832 true "" "plot [wood-stock / (total-wood-effort)] of community 4"
-"Community 5" 1.0 0 -1184463 true "" "plot [wood-stock / (total-wood-effort)] of community 5"
-"Community 6" 1.0 0 -10899396 true "" "plot [wood-stock / (total-wood-effort)] of community 6"
-"Community 7" 1.0 0 -13840069 true "" "plot [wood-stock / (total-wood-effort)] of community 7"
-"Community 8" 1.0 0 -14835848 true "" "plot [wood-stock / (total-wood-effort)] of community 8"
-"Community 9" 1.0 0 -11221820 true "" "plot [wood-stock / (total-wood-effort)] of community 9"
-"Community 10" 1.0 0 -13791810 true "" "plot [wood-stock / (total-wood-effort)] of community 10"
-"Community 11" 1.0 0 -13345367 true "" "plot [wood-stock / (total-wood-effort)] of community 11"
-"Community 12" 1.0 0 -8630108 true "" "plot [wood-stock / (total-wood-effort)] of community 12"
-"Community 13" 1.0 0 -5825686 true "" "plot [wood-stock / (total-wood-effort)] of community 13"
-"Community 14" 1.0 0 -2064490 true "" "plot [wood-stock / (total-wood-effort)] of community 14"
+"Community 0" 1.0 0 -16777216 true "" "carefully[plot [clay-stock / (total-clay-effort)] of community 0][plot 0]"
+"Community 1" 1.0 0 -7500403 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 1][plot 0]"
+"Community 2" 1.0 0 -2674135 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 2][plot 0]"
+"Community 3" 1.0 0 -955883 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 3][plot 0]"
+"Community 4" 1.0 0 -6459832 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 4][plot 0]"
+"Community 5" 1.0 0 -1184463 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 5][plot 0]"
+"Community 6" 1.0 0 -10899396 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 6][plot 0]"
+"Community 7" 1.0 0 -13840069 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 7][plot 0]"
+"Community 8" 1.0 0 -14835848 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 8][plot 0]"
+"Community 9" 1.0 0 -11221820 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 9][plot 0]"
+"Community 10" 1.0 0 -13791810 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 10][plot 0]"
+"Community 11" 1.0 0 -13345367 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 11][plot 0]"
+"Community 12" 1.0 0 -8630108 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 12][plot 0]"
+"Community 13" 1.0 0 -5825686 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 13][plot 0]"
+"Community 14" 1.0 0 -2064490 true "" "carefully[plot [wood-stock / (total-wood-effort)] of community 14][plot 0]"
 
 @#$#@#$#@
 ## WHAT IS IT?
